@@ -4,6 +4,7 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(), // cuid or uuid
   username: text("username").notNull().unique(),
+  displayName: text("display_name").notNull(),
   passwordHash: text("password_hash").notNull(),
   telegramBotToken: text("telegram_bot_token").notNull(),
   telegramChatId: text("telegram_chat_id").notNull(),
@@ -60,4 +61,13 @@ export const playlistItems = sqliteTable("playlist_items", {
     .references(() => files.id, { onDelete: "cascade" })
     .notNull(),
   order: integer("order").notNull(),
+});
+
+// 5. Sessions Table
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(), // session token
+  userId: text("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
 });

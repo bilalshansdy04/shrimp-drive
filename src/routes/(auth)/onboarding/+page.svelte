@@ -15,19 +15,103 @@
   let currentStep = $state(1);
   let botToken = $state("");
   let botVerified = $state(false);
+  let displayName = $state("");
+  let username = $state("");
+  let password = $state("");
+  let chatId = $state("");
+  let pingSuccess = $state(false);
+  
+  let isLoading = $state(false);
+  let errorMsg = $state("");
 
   function nextStep() {
     if (currentStep < 4) currentStep++;
   }
 
   function prevStep() {
-    if (currentStep > 1) currentStep--;
+    if (currentStep > 1) {
+      currentStep--;
+      errorMsg = "";
+    }
   }
 
-  function verifyBot() {
-    if (botToken.length > 10) {
-      botVerified = true;
+  async function verifyBot() {
+    errorMsg = "";
+    if (botToken.length < 10) {
+      errorMsg = "Token is too short.";
+      return;
     }
+    
+    isLoading = true;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+      const data = await res.json();
+      if (data.ok) {
+        botVerified = true;
+      } else {
+        errorMsg = "Invalid Bot Token.";
+      }
+    } catch (e) {
+      errorMsg = "Failed to connect to Telegram API.";
+    }
+    isLoading = false;
+  }
+
+  async function testPing() {
+    errorMsg = "";
+    pingSuccess = false;
+    if (!chatId || !botVerified) return;
+    
+    isLoading = true;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: '🦐 Ping! Shrimp Drive is successfully connected to this channel.'
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        pingSuccess = true;
+      } else {
+        errorMsg = `Failed to send ping: ${data.description}`;
+      }
+    } catch (e) {
+      errorMsg = "Failed to connect to Telegram API.";
+    }
+    isLoading = false;
+  }
+
+  async function submitOnboarding() {
+    isLoading = true;
+    errorMsg = "";
+    try {
+      const res = await fetch('/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          displayName,
+          username,
+          password,
+          botToken,
+          chatId
+        })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        window.location.href = '/dashboard';
+      } else {
+        errorMsg = data.error || 'Failed to finish onboarding.';
+        currentStep = 1; // back to start to fix errors
+      }
+    } catch (err) {
+      errorMsg = 'An unexpected error occurred.';
+      currentStep = 1;
+    }
+    isLoading = false;
   }
 </script>
 
@@ -45,6 +129,12 @@
         <h1 class="text-3xl font-bold text-white">Shrimp Drive</h1>
       </div>
       <span class="inline-block bg-[#151921] border border-[#2A3241] rounded-full px-4 py-1 text-xs font-medium text-[#FF6B4A] tracking-wider uppercase">Initial Setup</span>
+      
+      {#if errorMsg}
+        <div class="mt-4 bg-[#93000a] text-[#ffdad6] px-4 py-2 rounded-lg text-sm font-medium animate-[fadeIn_0.3s_ease]">
+          {errorMsg}
+        </div>
+      {/if}
     </header>
 
     <!-- Main Card -->
@@ -91,21 +181,21 @@
               <label class="block text-xs font-medium text-gray-400 mb-1" for="displayName">Display Name</label>
               <div class="relative flex items-center">
                 <User class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input id="displayName" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="Admin" type="text"/>
+                <input bind:value={displayName} id="displayName" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="Admin" type="text"/>
               </div>
             </div>
             <div class="relative group">
               <label class="block text-xs font-medium text-gray-400 mb-1" for="username">Username</label>
               <div class="relative flex items-center">
                 <AtSign class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input id="username" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="admin_user" type="text"/>
+                <input bind:value={username} id="username" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="admin_user" type="text"/>
               </div>
             </div>
             <div class="relative group">
               <label class="block text-xs font-medium text-gray-400 mb-1" for="password">Master Password</label>
               <div class="relative flex items-center">
                 <Key class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input id="password" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="••••••••" type="password"/>
+                <input bind:value={password} id="password" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="••••••••" type="password"/>
               </div>
             </div>
           </div>
@@ -139,8 +229,8 @@
                 <KeyRound class="absolute left-3 {botVerified ? 'text-[#4edea3]' : 'text-[#2A3241]'} group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
                 <input bind:value={botToken} class="w-full bg-[#0B0E14] border {botVerified ? 'border-[#4edea3]' : 'border-[#2A3241]'} rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" id="bot-token" placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ" type="text"/>
               </div>
-              <button class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 text-sm flex items-center gap-2 whitespace-nowrap transition-colors" onclick={verifyBot}>
-                Verify
+              <button disabled={isLoading} class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 text-sm flex items-center gap-2 whitespace-nowrap transition-colors disabled:opacity-50" onclick={verifyBot}>
+                {isLoading ? 'Verifying...' : 'Verify'}
               </button>
             </div>
           </div>
@@ -182,14 +272,21 @@
             <label class="block text-xs font-medium text-gray-400 mb-1" for="channel-id">Channel ID</label>
             <div class="flex gap-2">
               <div class="relative flex-grow flex items-center">
-                <Hash class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input id="channel-id" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="-1001234567890" type="text"/>
+                <Hash class="absolute left-3 {pingSuccess ? 'text-[#4edea3]' : 'text-[#2A3241]'} group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
+                <input bind:value={chatId} id="channel-id" class="w-full bg-[#0B0E14] border {pingSuccess ? 'border-[#4edea3]' : 'border-[#2A3241]'} rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="-1001234567890" type="text"/>
               </div>
-              <button class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 text-sm flex items-center gap-2 whitespace-nowrap transition-colors">
-                Test Ping
+              <button disabled={isLoading} class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 text-sm flex items-center gap-2 whitespace-nowrap transition-colors disabled:opacity-50" onclick={testPing}>
+                {isLoading ? 'Testing...' : 'Test Ping'}
               </button>
             </div>
           </div>
+          
+          {#if pingSuccess}
+            <div class="flex items-center gap-2 text-[#4edea3] text-xs font-medium animate-[fadeIn_0.3s_ease]">
+              <CheckCircle2 size={18} />
+              Ping sent! Check your channel.
+            </div>
+          {/if}
           
           <div class="flex justify-between mt-8 pt-4 border-t border-[#2A3241]">
             <button class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 flex items-center gap-2 text-sm transition-colors" onclick={prevStep}>
@@ -224,9 +321,9 @@
             <div class="text-xs text-gray-400">Allocated: 8.0 GB / Speed: Optimal</div>
           </div>
           
-          <a href="/dashboard" class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-3 flex justify-center items-center gap-2 text-base transition-colors w-full">
-            Open Dashboard <LayoutDashboard size={20} />
-          </a>
+          <button disabled={isLoading} onclick={submitOnboarding} class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-3 flex justify-center items-center gap-2 text-base transition-colors w-full disabled:opacity-50">
+            {isLoading ? 'Configuring System...' : 'Launch Drive'} <Rocket size={20} />
+          </button>
         </section>
       {/if}
       
