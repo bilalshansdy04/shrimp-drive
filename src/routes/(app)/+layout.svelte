@@ -238,7 +238,7 @@
 			</div>
 
 			<div class="ml-auto flex items-center gap-4 pl-4">
-				<input type="file" class="hidden" bind:this={fileInput} onchange={handleUpload} />
+				<input type="file" id="global-file-upload" class="hidden" bind:this={fileInput} onchange={handleUpload} />
 				<button
 					onclick={() => fileInput.click()}
 					disabled={isUploading}

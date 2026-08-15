@@ -21,11 +21,31 @@
 	let { data } = $props<{ data: PageData }>();
 
 	let filter = $state('all');
+	let isDragging = $state(false);
+
+	function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		isDragging = false;
+		if (e.dataTransfer?.files?.length) {
+			const globalInput = document.getElementById('global-file-upload') as HTMLInputElement;
+			if (globalInput) {
+				globalInput.files = e.dataTransfer.files;
+				globalInput.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		}
+	}
+
+	function triggerUploadClick() {
+		const globalInput = document.getElementById('global-file-upload') as HTMLInputElement;
+		if (globalInput) {
+			globalInput.click();
+		}
+	}
 
 	let filteredFiles = $derived(
 		filter === 'all'
 			? data.recentFiles
-			: data.recentFiles.filter((f) => f.fileType === filter)
+			: data.recentFiles.filter((f: any) => f.fileType === filter)
 	);
 
 	let percentage = $derived(
@@ -151,8 +171,14 @@
 	</div>
 
 	<!-- Upload Zone -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="group mb-8 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#2A3241] bg-[#10131a] p-8 transition-colors duration-150 hover:bg-[#151921] hover:border-[#FF6B4A]"
+		class="group mb-8 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#2A3241] bg-[#10131a] p-8 transition-colors duration-150 hover:bg-[#151921] hover:border-[#FF6B4A] {isDragging ? 'border-[#FF6B4A] bg-[#151921]' : ''}"
+		ondrop={handleDrop}
+		ondragover={(e) => { e.preventDefault(); isDragging = true; }}
+		ondragleave={(e) => { e.preventDefault(); isDragging = false; }}
+		onclick={triggerUploadClick}
 	>
 		<UploadCloud
 			class="mb-3 text-[#2A3241] transition-colors duration-150 group-hover:text-[#FF6B4A]"
