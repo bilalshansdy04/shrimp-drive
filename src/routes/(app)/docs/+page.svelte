@@ -1,131 +1,174 @@
 <script lang="ts">
-  import { 
-    List, 
-    LayoutGrid, 
-    FileText, 
-    Download, 
-    MoreVertical, 
-    ChevronLeft, 
-    ChevronRight 
-  } from "lucide-svelte";
+	import { 
+		FileText, 
+		FileSpreadsheet, 
+		Presentation, 
+		Archive, 
+		File, 
+		Download, 
+		ExternalLink, 
+		Search,
+		FileCode
+	} from 'lucide-svelte';
+	import type { PageData } from './$types';
+	import { formatBytes } from '$lib/utils';
+
+	const { data }: { data: PageData } = $props();
+	const docFiles = $derived(data.docFiles);
+
+	let searchQuery = $state('');
+
+	const filteredDocs = $derived(
+		docFiles.filter((file) => file.fileName.toLowerCase().includes(searchQuery.toLowerCase()))
+	);
+
+	function getFileExtension(filename: string): string {
+		return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2).toLowerCase();
+	}
+
+	function getIconAndColor(filename: string) {
+		const ext = getFileExtension(filename);
+		
+		switch (ext) {
+			case 'pdf':
+				return { component: FileText, color: 'text-rose-500', bg: 'bg-rose-500/10' };
+			case 'doc':
+			case 'docx':
+				return { component: FileText, color: 'text-blue-500', bg: 'bg-blue-500/10' };
+			case 'xls':
+			case 'xlsx':
+			case 'csv':
+				return { component: FileSpreadsheet, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+			case 'ppt':
+			case 'pptx':
+				return { component: Presentation, color: 'text-amber-500', bg: 'bg-amber-500/10' };
+			case 'zip':
+			case 'rar':
+			case '7z':
+			case 'tar':
+			case 'gz':
+				return { component: Archive, color: 'text-purple-500', bg: 'bg-purple-500/10' };
+			case 'txt':
+			case 'md':
+			case 'json':
+			case 'js':
+			case 'ts':
+			case 'html':
+			case 'css':
+				return { component: FileCode, color: 'text-slate-400', bg: 'bg-slate-500/10' };
+			default:
+				return { component: File, color: 'text-slate-400', bg: 'bg-slate-500/10' };
+		}
+	}
+
+	function formatDate(date: Date | string | null) {
+		if (!date) return 'Unknown date';
+		return new Date(date).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
+	}
 </script>
 
-<div class="flex-1 overflow-y-auto p-6 md:p-8 flex flex-col gap-6">
-  <!-- Page Header -->
-  <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
-    <div>
-      <h2 class="text-3xl font-bold text-white">Documents Library</h2>
-      <p class="text-sm text-gray-400 mt-1">Manage and review your technical documentation.</p>
-    </div>
-    <!-- View Toggles / Filters -->
-    <div class="flex items-center gap-1 p-1 rounded-lg bg-[#1D2026] border border-[#32353C]">
-      <button class="p-1.5 rounded bg-[#32353C] text-[#FF6B4A] shadow-sm">
-        <List size={20} />
-      </button>
-      <button class="p-1.5 rounded text-gray-400 hover:bg-[#272A31] transition-colors">
-        <LayoutGrid size={20} />
-      </button>
-    </div>
-  </div>
+<div class="flex h-full flex-col overflow-y-auto p-6">
+	<!-- Header & Search -->
+	<div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+		<div>
+			<h1 class="text-3xl font-bold text-white">Document Hub</h1>
+			<p class="mt-2 text-gray-400">Manage all your files, archives, and documents</p>
+		</div>
+		<div class="relative w-full sm:w-72">
+			<Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+			<input
+				type="text"
+				placeholder="Search documents..."
+				bind:value={searchQuery}
+				class="w-full rounded-full border border-[#2A3241] bg-[#151921] py-2 pl-10 pr-4 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-primary-container"
+			/>
+		</div>
+	</div>
 
-  <!-- Documents Table Container -->
-  <div class="bg-[#151921] border border-[#2A3241] rounded-2xl w-full overflow-hidden flex flex-col flex-1 min-h-[400px]">
-    <!-- Table Header -->
-    <div class="grid grid-cols-12 gap-4 p-4 border-b border-[#32353C] bg-[#191C22] text-xs text-gray-400 uppercase tracking-wider items-center">
-      <div class="col-span-5 md:col-span-4 pl-2">Name</div>
-      <div class="hidden md:block col-span-2 text-right">Pages</div>
-      <div class="col-span-3 md:col-span-3 text-right">Date Modified</div>
-      <div class="col-span-2 text-right">Size</div>
-      <div class="hidden md:block col-span-1 text-center">Ext</div>
-      <div class="col-span-2 md:col-span-2 text-right pr-2">Actions</div>
-    </div>
+	{#if docFiles.length === 0}
+		<div class="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-[#2A3241] p-12 text-center">
+			<div class="mb-4 rounded-full bg-[#151921] p-4 text-gray-400">
+				<FileText size={48} />
+			</div>
+			<h3 class="mb-2 text-xl font-bold text-white">No documents yet</h3>
+			<p class="max-w-sm text-gray-400">
+				Upload your first PDF, Word, or Archive file to start managing them here.
+			</p>
+		</div>
+	{:else if filteredDocs.length === 0}
+		<div class="flex py-12 flex-col items-center justify-center text-center">
+			<div class="mb-4 rounded-full bg-[#151921] p-4 text-gray-500">
+				<Search size={32} />
+			</div>
+			<p class="text-gray-400">No documents found matching "{searchQuery}"</p>
+		</div>
+	{:else}
+		<!-- List View -->
+		<div class="flex flex-col gap-2">
+			<!-- Table Header -->
+			<div class="hidden grid-cols-12 gap-4 rounded-lg bg-[#151921]/50 px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 sm:grid">
+				<div class="col-span-6 md:col-span-7">Name</div>
+				<div class="col-span-2 hidden md:block">Date</div>
+				<div class="col-span-3 md:col-span-2 text-right">Size</div>
+				<div class="col-span-3 md:col-span-1 text-right">Action</div>
+			</div>
 
-    <!-- Table Body -->
-    <div class="flex-1 overflow-y-auto flex flex-col">
-      <!-- Row 1 -->
-      <a href="/docs/q3-architecture" class="grid grid-cols-12 gap-4 p-4 border-b border-[#32353C]/50 hover:bg-[#1E2430] items-center transition-colors group cursor-pointer text-white">
-        <div class="col-span-5 md:col-span-4 flex items-center gap-4 pl-2">
-          <div class="w-10 h-10 rounded-lg bg-[#1D2026] flex items-center justify-center border border-[#32353C] group-hover:border-[#FF6B4A]/50 transition-colors shrink-0">
-            <FileText size={24} class="text-[#FF6B4A]" />
-          </div>
-          <span class="text-sm font-medium truncate group-hover:text-[#FF6B4A] transition-colors">Q3_Architecture_Review.pdf</span>
-        </div>
-        <div class="hidden md:block col-span-2 text-right text-sm text-gray-400">42</div>
-        <div class="col-span-3 md:col-span-3 text-right text-sm text-gray-400">Oct 12, 2023</div>
-        <div class="col-span-2 text-right text-sm text-gray-400">4.2 MB</div>
-        <div class="hidden md:block col-span-1 text-center">
-          <span class="px-2 py-1 rounded bg-[#272A31] text-gray-400 text-xs border border-[#32353C]/50">PDF</span>
-        </div>
-        <div class="col-span-2 md:col-span-2 flex justify-end items-center gap-2 pr-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-          <button class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-[#272A31] hover:text-[#FF6B4A] transition-colors">
-            <Download size={18} />
-          </button>
-          <button class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-[#272A31] transition-colors">
-            <MoreVertical size={18} />
-          </button>
-        </div>
-      </a>
+			<!-- List Items -->
+			{#each filteredDocs as doc (doc.id)}
+				{@const IconInfo = getIconAndColor(doc.fileName)}
+				<div class="group flex flex-col gap-2 rounded-xl border border-[#2A3241] bg-[#151921] p-4 transition-all hover:border-primary-container hover:bg-[#1A202A] sm:grid sm:grid-cols-12 sm:items-center sm:gap-4 sm:px-4 sm:py-3">
+					
+					<!-- Name & Icon -->
+					<div class="col-span-6 flex items-center gap-4 md:col-span-7 overflow-hidden">
+						<div class={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${IconInfo.bg}`}>
+							<IconInfo.component size={20} class={IconInfo.color} />
+						</div>
+						<div class="min-w-0 flex-1">
+							<h3 class="truncate text-sm font-medium text-white" title={doc.fileName}>
+								{doc.fileName}
+							</h3>
+						</div>
+					</div>
 
-      <!-- Row 2 -->
-      <a href="/docs/system-specs" class="grid grid-cols-12 gap-4 p-4 border-b border-[#32353C]/50 hover:bg-[#1E2430] items-center transition-colors group cursor-pointer text-white">
-        <div class="col-span-5 md:col-span-4 flex items-center gap-4 pl-2">
-          <div class="w-10 h-10 rounded-lg bg-[#1D2026] flex items-center justify-center border border-[#32353C] group-hover:border-[#FF6B4A]/50 transition-colors shrink-0">
-            <FileText size={24} class="text-[#FF6B4A]" />
-          </div>
-          <span class="text-sm font-medium truncate group-hover:text-[#FF6B4A] transition-colors">System_Specs_V2.pdf</span>
-        </div>
-        <div class="hidden md:block col-span-2 text-right text-sm text-gray-400">128</div>
-        <div class="col-span-3 md:col-span-3 text-right text-sm text-gray-400">Nov 05, 2023</div>
-        <div class="col-span-2 text-right text-sm text-gray-400">12.8 MB</div>
-        <div class="hidden md:block col-span-1 text-center">
-          <span class="px-2 py-1 rounded bg-[#272A31] text-gray-400 text-xs border border-[#32353C]/50">PDF</span>
-        </div>
-        <div class="col-span-2 md:col-span-2 flex justify-end items-center gap-2 pr-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-          <button class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-[#272A31] hover:text-[#FF6B4A] transition-colors">
-            <Download size={18} />
-          </button>
-          <button class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-[#272A31] transition-colors">
-            <MoreVertical size={18} />
-          </button>
-        </div>
-      </a>
+					<!-- Date -->
+					<div class="col-span-2 hidden text-sm text-gray-400 md:block">
+						{formatDate(doc.createdAt)}
+					</div>
 
-      <!-- Row 3 -->
-      <a href="/docs/api-docs" class="grid grid-cols-12 gap-4 p-4 border-b border-[#32353C]/50 hover:bg-[#1E2430] items-center transition-colors group cursor-pointer text-white">
-        <div class="col-span-5 md:col-span-4 flex items-center gap-4 pl-2">
-          <div class="w-10 h-10 rounded-lg bg-[#1D2026] flex items-center justify-center border border-[#32353C] group-hover:border-[#FF6B4A]/50 transition-colors shrink-0">
-            <FileText size={24} class="text-[#FF6B4A]" />
-          </div>
-          <span class="text-sm font-medium truncate group-hover:text-[#FF6B4A] transition-colors">API_Documentation.pdf</span>
-        </div>
-        <div class="hidden md:block col-span-2 text-right text-sm text-gray-400">856</div>
-        <div class="col-span-3 md:col-span-3 text-right text-sm text-gray-400">Nov 18, 2023</div>
-        <div class="col-span-2 text-right text-sm text-gray-400">45.1 MB</div>
-        <div class="hidden md:block col-span-1 text-center">
-          <span class="px-2 py-1 rounded bg-[#272A31] text-gray-400 text-xs border border-[#32353C]/50">PDF</span>
-        </div>
-        <div class="col-span-2 md:col-span-2 flex justify-end items-center gap-2 pr-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-          <button class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-[#272A31] hover:text-[#FF6B4A] transition-colors">
-            <Download size={18} />
-          </button>
-          <button class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-[#272A31] transition-colors">
-            <MoreVertical size={18} />
-          </button>
-        </div>
-      </a>
-    </div>
+					<!-- Size -->
+					<div class="col-span-3 text-sm text-gray-400 sm:text-right md:col-span-2">
+						{formatBytes(doc.fileSize)}
+					</div>
 
-    <!-- Table Footer / Pagination -->
-    <div class="p-4 border-t border-[#32353C] bg-[#0B0E14] flex justify-between items-center text-gray-400 text-sm">
-      <span>Showing 3 of 3 items</span>
-      <div class="flex items-center gap-2">
-        <button class="p-1 rounded hover:bg-[#272A31] disabled:opacity-50" disabled>
-          <ChevronLeft size={20} />
-        </button>
-        <button class="p-1 rounded hover:bg-[#272A31] disabled:opacity-50" disabled>
-          <ChevronRight size={20} />
-        </button>
-      </div>
-    </div>
-  </div>
+					<!-- Actions -->
+					<div class="col-span-3 flex justify-end gap-2 md:col-span-1">
+						<!-- Preview in New Tab (Inline) -->
+						<a
+							href={`/api/files/${doc.id}/download`}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+							title="Preview"
+						>
+							<ExternalLink size={18} />
+						</a>
+						
+						<!-- Force Download (Attachment) -->
+						<a
+							href={`/api/files/${doc.id}/download?download=1`}
+							download={doc.fileName}
+							class="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+							title="Download"
+						>
+							<Download size={18} />
+						</a>
+					</div>
+				</div>
+			{/each}
+		</div>
+	{/if}
 </div>
