@@ -12,9 +12,10 @@
 		Settings,
 		LogOut
 	} from 'lucide-svelte';
+	import { enhance } from '$app/forms';
 	import '../../app.css';
 
-	let { children } = $props();
+	let { data, children } = $props();
 </script>
 
 <div class="flex h-screen w-full overflow-hidden bg-[#0B0E14] text-white">
@@ -99,16 +100,20 @@
 			</div>
 
 			<div class="flex items-center gap-3">
-				<div class="h-10 w-10 rounded-full bg-gradient-to-tr from-[#FF6B4A] to-purple-500"></div>
-				<div class="flex-1 overflow-hidden">
-					<p class="truncate text-sm font-medium">User Account</p>
+				<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-tr from-[#FF6B4A] to-purple-500 text-lg font-bold text-white uppercase">
+					{data.user?.displayName?.[0] || 'U'}
 				</div>
-				<button class="p-1 text-gray-400 hover:text-white">
+				<div class="flex-1 overflow-hidden">
+					<p class="truncate text-sm font-medium">{data.user?.displayName || 'User Account'}</p>
+				</div>
+				<button class="p-1 text-gray-400 transition-colors hover:text-white" title="Settings">
 					<Settings size={16} />
 				</button>
-				<button class="p-1 text-gray-400 hover:text-white">
-					<LogOut size={16} />
-				</button>
+				<form action="/logout" method="POST" use:enhance class="flex">
+					<button class="p-1 text-gray-400 transition-colors hover:text-white" type="submit" title="Log Out">
+						<LogOut size={16} />
+					</button>
+				</form>
 			</div>
 		</div>
 	</aside>
