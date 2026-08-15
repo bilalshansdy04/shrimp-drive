@@ -15,6 +15,8 @@
 	} from 'lucide-svelte';
 	import { formatBytes, formatDate } from '$lib/utils';
 	import type { PageData } from './$types';
+	import { enhance } from '$app/forms';
+	import { toast } from 'svelte-sonner';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -207,8 +209,21 @@
 										{:else}
 											<button class="text-[#FF6B4A] hover:text-[#FF8264]" title="View"><Eye size={18} /></button>
 										{/if}
-										<button class="text-gray-400 hover:text-white" title="Download"><Download size={18} /></button>
-										<button class="text-[#EF4444] hover:text-[#F87171]" title="Delete"><Trash2 size={18} /></button>
+										<a href="/api/files/{file.id}/download" download class="text-gray-400 hover:text-white flex items-center justify-center" title="Download"><Download size={18} /></a>
+										<form method="POST" action="?/delete" class="inline flex items-center justify-center" use:enhance={() => {
+											const tid = toast.loading('Deleting file...');
+											return async ({ result, update }) => {
+												if (result.type === 'success') {
+													toast.success('File deleted successfully', { id: tid });
+													await update();
+												} else {
+													toast.error('Failed to delete file', { id: tid });
+												}
+											};
+										}}>
+											<input type="hidden" name="fileId" value={file.id} />
+											<button type="submit" class="text-[#EF4444] hover:text-[#F87171]" title="Delete"><Trash2 size={18} /></button>
+										</form>
 									</div>
 								</td>
 							</tr>

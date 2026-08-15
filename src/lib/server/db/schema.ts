@@ -37,6 +37,7 @@ export const files = sqliteTable("files", {
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
 });
 
 // 3. Playlists Table

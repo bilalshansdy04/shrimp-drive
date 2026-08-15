@@ -46,3 +46,17 @@ export async function uploadFileToTelegram(botToken: string, chatId: string, fil
         throw err;
     }
 }
+
+export async function getFileDownloadUrl(botToken: string, fileId: string) {
+    const url = `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`;
+    
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    if (!data.ok) {
+        throw new Error(data.description || 'Failed to get file from Telegram');
+    }
+    
+    const filePath = data.result.file_path;
+    return `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+}
