@@ -79,6 +79,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (videoDuration) {
 				metadata.duration = parseFloat(videoDuration);
 			}
+		} else if (fileType === 'image') {
+			const imageThumbnail = formData.get('imageThumbnail') as string | null;
+			if (imageThumbnail) {
+				metadata.thumbnailUrl = imageThumbnail;
+			}
 		}
 
 		// Upload to Telegram

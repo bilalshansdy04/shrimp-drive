@@ -113,6 +113,40 @@
 			} catch (e) {
 				console.error('Thumbnail extraction failed', e);
 			}
+		} else if (file.type.startsWith('image/')) {
+			toastId = toast.loading('Creating thumbnail...', { description: 'Compressing image' });
+			try {
+				const imageThumbnail = await new Promise<string | null>((resolve) => {
+					const img = new window.Image();
+					img.onload = () => {
+						const canvas = document.createElement('canvas');
+						const ctx = canvas.getContext('2d');
+						if (!ctx) return resolve(null);
+
+						const maxWidth = 320;
+						const scale = Math.min(1, maxWidth / img.width);
+						canvas.width = img.width * scale;
+						canvas.height = img.height * scale;
+
+						ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+						const dataUrl = canvas.toDataURL('image/webp', 0.8);
+						URL.revokeObjectURL(img.src);
+						resolve(dataUrl);
+					};
+					img.onerror = () => {
+						// Fallback for unsupported formats like HEIC
+						URL.revokeObjectURL(img.src);
+						resolve(null);
+					};
+					img.src = URL.createObjectURL(file);
+				});
+
+				if (imageThumbnail) {
+					formData.append('imageThumbnail', imageThumbnail);
+				}
+			} catch (e) {
+				console.error('Image thumbnail extraction failed', e);
+			}
 		}
 
 		isUploading = true;
