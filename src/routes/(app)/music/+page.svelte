@@ -18,62 +18,38 @@
 		Volume2
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
-	import { formatBytes, formatDate } from '$lib/utils';
+	import { media } from '$lib/client/mediaState.svelte';
 
 	let { data } = $props<{ data: PageData }>();
 
-	let audioFiles = $derived(data.audioFiles);
-	let totalSize = $derived(audioFiles.reduce((acc: any, f: any) => acc + f.fileSize, 0));
+	let audioFiles = data.audioFiles;
+	let totalSize = audioFiles.reduce((acc: number, f: any) => acc + f.fileSize, 0);
 
-	let currentTrackIndex = $state(-1);
-	let currentTrack = $derived(currentTrackIndex >= 0 ? audioFiles[currentTrackIndex] : null);
-
-	let audioElement: HTMLAudioElement;
-	let isPaused = $state(true);
-	let currentTime = $state(0);
-	let duration = $state(0);
-	let volume = $state(1);
-
-	function playTrack(index: number) {
-		currentTrackIndex = index;
-		isPaused = false;
+	function formatBytes(bytes: number) {
+		if (bytes === 0) return '0 B';
+		const k = 1024;
+		const sizes = ['B', 'KB', 'MB', 'GB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 	}
 
-	function togglePlay() {
-		if (currentTrackIndex === -1 && audioFiles.length > 0) {
-			playTrack(0);
-		} else if (currentTrackIndex !== -1) {
-			isPaused = !isPaused;
-		}
+	function formatDate(dateString: string | null) {
+		if (!dateString) return 'Unknown';
+		return new Date(dateString).toLocaleDateString('en-US', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric'
+		});
 	}
 
-	function playNext() {
-		if (currentTrackIndex < audioFiles.length - 1) {
-			playTrack(currentTrackIndex + 1);
-		}
+	function handleSeek(e: Event) {
+		const target = e.target as HTMLInputElement;
+		media.currentTime = Number(target.value);
 	}
 
-	function playPrev() {
-		if (currentTrackIndex > 0) {
-			playTrack(currentTrackIndex - 1);
-		}
-	}
-
-	function handleSeek(e: MouseEvent) {
-		const target = e.currentTarget as HTMLElement;
-		const rect = target.getBoundingClientRect();
-		const x = e.clientX - rect.left;
-		const percentage = x / rect.width;
-		if (duration > 0 && audioElement) {
-			audioElement.currentTime = percentage * duration;
-		}
-	}
-
-	function handleVolume(e: MouseEvent) {
-		const target = e.currentTarget as HTMLElement;
-		const rect = target.getBoundingClientRect();
-		const x = e.clientX - rect.left;
-		volume = Math.max(0, Math.min(1, x / rect.width));
+	function handleVolume(e: Event) {
+		const target = e.target as HTMLInputElement;
+		media.volume = Number(target.value);
 	}
 
 	function formatTime(seconds: number) {
@@ -85,33 +61,16 @@
 
 	function formatBitrate(fileSize: number, duration: number | null) {
 		if (!duration || duration <= 0) return 'Unknown';
-		// Calculate average bitrate: (bytes * 8) / seconds / 1000 = kbps
 		const kbps = Math.round((fileSize * 8) / duration / 1000);
-		
-		// Snap to standard bitrates if within 15% to account for ID3 tag overhead
 		const standardBitrates = [64, 96, 128, 160, 192, 256, 320, 1411];
 		for (const std of standardBitrates) {
 			if (Math.abs(kbps - std) / std < 0.15) return `${std} kbps`;
 		}
-		
 		return `${kbps} kbps`;
 	}
 </script>
 
-<audio
-	bind:this={audioElement}
-	bind:currentTime
-	bind:duration
-	bind:paused={isPaused}
-	bind:volume
-	src={currentTrack ? `/api/files/${currentTrack.id}/download` : undefined}
-	onended={playNext}
-	autoplay
-></audio>
-
 <div class="mx-auto max-w-[1280px] pb-24">
-	<!-- pb-24 to clear bottom audio player -->
-	<!-- Page Header -->
 	<div class="mb-6 flex items-end justify-between">
 		<div>
 			<h1 class="mb-1 text-3xl font-bold text-white">Music Library</h1>
@@ -131,94 +90,103 @@
 		</div>
 	</div>
 
-	<!-- Bento Grid Header / Featured -->
 	<div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-		<!-- Featured Track (Hero) -->
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="group relative col-span-1 flex min-h-[200px] cursor-pointer flex-col justify-end overflow-hidden rounded-2xl border border-[#2A3241] bg-[#151921] p-6 lg:col-span-2"
-			onclick={togglePlay}
+			class="bg-primary-container col-span-1 flex flex-col items-center gap-6 rounded-2xl p-6 text-black md:flex-row lg:col-span-2"
 		>
-			<div
-				class="absolute inset-0 z-0 bg-cover bg-center opacity-40 transition-transform duration-700 ease-out group-hover:scale-105"
-				style="background-image: url('{currentTrack?.thumbnailUrl ||
-					'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=1000'}')"
-			></div>
-			<div
-				class="absolute inset-0 z-10 bg-gradient-to-t from-[#0B0E14] via-[#0B0E14]/80 to-transparent"
-			></div>
-
-			<div class="relative z-20 flex w-full items-end justify-between">
-				<div>
-					{#if currentTrack && !isPaused}
-						<div
-							class="mb-2 inline-flex items-center gap-1 rounded border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 px-2 py-0.5 text-[10px] font-medium tracking-wider text-[#FF6B4A] uppercase"
-						>
-							<Activity size={12} /> Now Playing
-						</div>
-					{/if}
-					<h2 class="text-2xl font-bold text-white drop-shadow-md">
-						{currentTrack?.title || currentTrack?.fileName || 'No track selected'}
-					</h2>
-					<p class="text-sm text-gray-400">
-						{currentTrack?.artist || 'Unknown Artist'} • {currentTrack?.album || 'Unknown Album'}
-					</p>
-				</div>
-				<button
-					class="flex h-12 w-12 items-center justify-center rounded-full bg-[#FF6B4A] text-[#0B0E14] shadow-[0_0_15px_rgba(255,107,74,0.3)] transition-all hover:scale-105 hover:bg-[#FF8264]"
-				>
-					{#if isPaused}
-						<Play size={24} fill="currentColor" class="ml-1" />
-					{:else}
-						<Pause size={24} fill="currentColor" />
-					{/if}
-				</button>
+			<div class="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl shadow-lg md:h-32 md:w-32">
+				{#if media.currentTrack && media.currentTrack.thumbnailUrl}
+					<img
+						src={media.currentTrack.thumbnailUrl}
+						alt="Cover"
+						class="h-full w-full object-cover"
+					/>
+				{:else}
+					<div class="flex h-full w-full items-center justify-center bg-black/20 text-black/50">
+						<Music size={40} />
+					</div>
+				{/if}
 			</div>
+			<div class="flex-1 text-center md:text-left">
+				<div class="mb-2 text-xs font-semibold tracking-wider text-black/70 uppercase">
+					Now Playing
+				</div>
+				<h2 class="mb-1 text-2xl font-bold md:text-3xl">
+					{media.currentTrack
+						? media.currentTrack.title || media.currentTrack.fileName
+						: 'No Track Selected'}
+				</h2>
+				<p class="font-medium text-black/70">
+					{media.currentTrack ? media.currentTrack.artist || 'Unknown Artist' : '---'}
+				</p>
+			</div>
+			<button
+				onclick={() => media.togglePlay()}
+				class="flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
+			>
+				{#if media.isPaused}
+					<Play size={24} fill="currentColor" class="ml-1" />
+				{:else}
+					<Pause size={24} fill="currentColor" />
+				{/if}
+			</button>
 		</div>
 
-		<!-- Audio Pipeline Stats -->
 		<div class="flex flex-col justify-between rounded-2xl border border-[#2A3241] bg-[#151921] p-6">
 			<div>
 				<h3 class="mb-4 flex items-center gap-2 text-sm font-medium text-gray-400">
-					<SlidersHorizontal size={18} /> Audio Pipeline Stats
+					<ListMusic size={18} /> Up Next
 				</h3>
-				<div class="space-y-4">
-					<div>
-						<div class="mb-1 flex justify-between text-[11px] font-medium text-gray-400">
-							<span>Stream Buffer</span>
-							<span class="text-[#10B981]">Optimal</span>
+
+				{#if media.currentIndex !== -1 && media.currentIndex < media.playlist.length - 1}
+					{@const nextTrack = media.playlist[media.currentIndex + 1]}
+					<div class="flex items-center gap-4 rounded-lg border border-[#2A3241] bg-[#0B0E14] p-3">
+						<div class="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-[#2A3241]">
+							{#if nextTrack.thumbnailUrl}
+								<img src={nextTrack.thumbnailUrl} alt="Cover" class="h-full w-full object-cover" />
+							{:else}
+								<div class="flex h-full w-full items-center justify-center text-gray-500">
+									<Music size={20} />
+								</div>
+							{/if}
 						</div>
-						<div
-							class="h-1.5 w-full overflow-hidden rounded-full border border-[#2A3241] bg-[#10131a]"
-						>
-							<div class="h-full w-[85%] bg-[#10B981]"></div>
+						<div class="flex min-w-0 flex-1 flex-col">
+							<span class="truncate text-sm font-medium text-white"
+								>{nextTrack.title || nextTrack.fileName}</span
+							>
+							<span class="truncate text-xs text-gray-400"
+								>{nextTrack.artist || 'Unknown Artist'}</span
+							>
 						</div>
 					</div>
-					<div>
-						<div class="mb-1 flex justify-between text-[11px] font-medium text-gray-400">
-							<span>Transcode Queue</span>
-							<span>2 pending</span>
-						</div>
-						<div
-							class="h-1.5 w-full overflow-hidden rounded-full border border-[#2A3241] bg-[#10131a]"
-						>
-							<div class="h-full w-[15%] bg-[#FF6B4A]"></div>
-						</div>
+				{:else}
+					<div
+						class="flex h-20 items-center justify-center rounded-lg border border-dashed border-[#2A3241] text-xs text-gray-500"
+					>
+						End of playlist
 					</div>
-				</div>
+				{/if}
 			</div>
 			<div class="mt-4 flex items-center justify-between border-t border-[#2A3241] pt-4">
 				<span class="text-xs text-gray-400">Current Bitrate</span>
 				<span class="text-xs font-medium text-[#FF6B4A]">
-					{currentTrack ? formatBitrate(currentTrack.fileSize, currentTrack.duration) : '---'}
+					{media.currentTrack
+						? formatBitrate(media.currentTrack.fileSize, media.currentTrack.duration)
+						: '---'}
 				</span>
 			</div>
 		</div>
 	</div>
 
-	<!-- Table Container -->
 	<div class="overflow-hidden rounded-2xl border border-[#2A3241] bg-[#151921] shadow-lg">
+		<div class="border-b border-[#2A3241] p-4">
+			<button
+				onclick={() => media.playTrack(0, audioFiles)}
+				class="bg-primary-container flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-black transition-transform hover:scale-105"
+			>
+				<Play size={18} fill="currentColor" /> Play All
+			</button>
+		</div>
 		<div class="overflow-x-auto">
 			<table class="w-full border-collapse text-left">
 				<thead>
@@ -239,23 +207,24 @@
 					</tr>
 				</thead>
 				<tbody class="divide-y divide-[#2A3241]/50 text-sm text-white">
-					{#each audioFiles as track, i}
+					{#each audioFiles as track, index}
 						<tr
-							class="group cursor-pointer transition-colors hover:bg-[#1E2430] {currentTrackIndex ===
-							i
-								? 'relative bg-[#1E2430]/50'
-								: ''}"
-							onclick={() => playTrack(i)}
+							class="group cursor-pointer transition-colors hover:bg-[#1E2430]"
+							onclick={() => media.playTrack(index, audioFiles)}
 						>
 							<td class="px-4 py-3 text-center text-xs text-gray-400">
-								{#if currentTrackIndex === i}
-									{#if isPaused}
-										<Pause size={18} class="mx-auto text-[#FF6B4A]" />
-									{:else}
-										<Activity size={18} class="mx-auto text-[#FF6B4A]" />
-									{/if}
+								{#if media.currentTrack === track && !media.isPaused}
+									<div class="text-primary-container h-3 w-3">
+										<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+											<polygon points="5 3 19 12 5 21 5 3"></polygon>
+										</svg>
+									</div>
 								{:else}
-									{i + 1}
+									<span class="text-xs text-gray-500 group-hover:hidden">{index + 1}</span>
+									<Play
+										size={14}
+										class="hidden text-gray-400 group-hover:block group-hover:text-white"
+									/>
 								{/if}
 							</td>
 							<td class="px-4 py-3">
@@ -273,10 +242,7 @@
 											<Music size={16} class="text-gray-400" />
 										{/if}
 									</div>
-									<span
-										class="font-medium {currentTrackIndex === i
-											? 'text-[#FF6B4A]'
-											: 'text-gray-300 transition-colors group-hover:text-white'}"
+									<span class="font-medium text-gray-300 transition-colors group-hover:text-white"
 										>{track.title || track.fileName}</span
 									>
 								</div>
@@ -301,12 +267,6 @@
 									<MoreVertical size={18} />
 								</button>
 							</td>
-							{#if currentTrackIndex === i}
-								<!-- Active glow line -->
-								<td
-									class="absolute top-0 bottom-0 left-0 w-0.5 bg-[#FF6B4A] shadow-[0_0_8px_rgba(255,107,74,0.8)]"
-								></td>
-							{/if}
 						</tr>
 					{/each}
 				</tbody>
@@ -315,129 +275,99 @@
 	</div>
 </div>
 
-<!-- Bottom Audio Player (Footer) -->
-<div
-	class="fixed right-0 bottom-0 z-50 flex h-20 w-full flex-col border-t border-[#2A3241] bg-[#151921] shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.5)] md:w-[calc(100%-260px)]"
->
-	<!-- Progress Bar (Thin, full width top) -->
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="group relative h-1 w-full cursor-pointer bg-[#10131a]" onclick={handleSeek}>
-		<div
-			class="absolute top-0 left-0 h-full bg-[#FF6B4A]"
-			style="width: {duration ? (currentTime / duration) * 100 : 0}%"
-		></div>
-		<!-- Thumb appears on hover -->
-		<div
-			class="absolute top-1/2 -ml-1.5 h-3 w-3 -translate-y-1/2 rounded-full bg-[#FF6B4A] opacity-0 shadow-[0_0_8px_rgba(255,107,74,0.6)] transition-opacity duration-150 group-hover:opacity-100"
-			style="left: {duration ? (currentTime / duration) * 100 : 0}%"
-		></div>
-		<!-- Expanded hit area -->
-		<div class="absolute -top-2 -bottom-2 left-0 w-full bg-transparent"></div>
-	</div>
-
-	<div class="flex flex-1 items-center justify-between px-6">
-		<!-- Now Playing Info -->
-		<div class="flex w-1/3 min-w-[200px] items-center gap-4">
-			<div
-				class="group relative flex h-12 w-12 cursor-pointer items-center justify-center overflow-hidden rounded border border-[#2A3241] bg-[#10131a]"
-			>
-				{#if currentTrack?.thumbnailUrl}
+{#if media.currentTrack}
+	<div
+		class="fixed right-0 bottom-0 left-0 z-50 flex h-24 items-center justify-between border-t border-[#2A3241] bg-[#0B0E14]/95 px-6 backdrop-blur md:left-[260px]"
+	>
+		<div class="flex w-1/3 min-w-0 items-center gap-4">
+			<div class="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[#2A3241] shadow-md">
+				{#if media.currentTrack.thumbnailUrl}
 					<img
+						src={media.currentTrack.thumbnailUrl}
+						alt="Cover"
 						class="h-full w-full object-cover"
-						alt="Album Cover"
-						src={currentTrack.thumbnailUrl}
 					/>
 				{:else}
-					<Music size={20} class="text-gray-400" />
+					<div class="flex h-full w-full items-center justify-center text-gray-500">
+						<Music size={24} />
+					</div>
 				{/if}
-				<div
-					class="absolute inset-0 hidden items-center justify-center bg-black/50 transition-all group-hover:flex"
+			</div>
+			<div class="flex min-w-0 flex-col">
+				<span class="truncate font-medium text-white"
+					>{media.currentTrack.title || media.currentTrack.fileName}</span
 				>
-					<Maximize2 size={20} class="text-white" />
-				</div>
+				<span class="truncate text-sm text-gray-400"
+					>{media.currentTrack.artist || 'Unknown Artist'}</span
+				>
 			</div>
-			<div class="overflow-hidden">
-				<div class="cursor-pointer truncate text-sm font-medium text-white hover:underline">
-					{currentTrack?.title || currentTrack?.fileName || 'No track selected'}
-				</div>
-				<div class="cursor-pointer truncate text-xs text-gray-400 hover:underline">
-					{currentTrack?.artist || 'Unknown Artist'}
-				</div>
-			</div>
-			<button class="ml-2 p-1 text-gray-400 transition-colors hover:text-[#FF6B4A]">
-				<Heart size={20} />
+			<button class="ml-2 text-gray-400 hover:text-white">
+				<Heart size={18} />
 			</button>
 		</div>
 
-		<!-- Playback Controls -->
-		<div class="flex w-1/3 flex-1 flex-col items-center justify-center">
+		<!-- Center: Controls -->
+		<div class="flex max-w-lg flex-1 flex-col items-center gap-2">
 			<div class="flex items-center gap-6">
-				<button class="text-gray-400 transition-colors hover:text-white active:scale-95">
-					<Shuffle size={20} />
-				</button>
-				<button
-					class="text-gray-400 transition-colors hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-					onclick={playPrev}
-					disabled={currentTrackIndex <= 0}
+				<button class="text-gray-400 hover:text-white"><Repeat size={18} /></button>
+				<button class="text-gray-400 hover:text-white" onclick={() => media.playPrev()}
+					><SkipBack size={20} fill="currentColor" /></button
 				>
-					<SkipBack size={24} fill="currentColor" />
-				</button>
 				<button
-					class="flex h-10 w-10 items-center justify-center rounded-full bg-[#FF6B4A] text-[#0B0E14] shadow-[0_0_10px_rgba(255,107,74,0.2)] transition-all hover:bg-[#FF8264] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-					onclick={togglePlay}
-					disabled={audioFiles.length === 0}
+					class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
+					onclick={() => media.togglePlay()}
 				>
-					{#if isPaused}
-						<Play size={24} fill="currentColor" class="ml-1" />
+					{#if media.isPaused}
+						<Play size={18} fill="currentColor" class="ml-0.5" />
 					{:else}
-						<Pause size={24} fill="currentColor" />
+						<Pause size={18} fill="currentColor" />
 					{/if}
 				</button>
-				<button
-					class="text-gray-400 transition-colors hover:text-white active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-					onclick={playNext}
-					disabled={currentTrackIndex >= audioFiles.length - 1}
+				<button class="text-gray-400 hover:text-white" onclick={() => media.playNext()}
+					><SkipForward size={20} fill="currentColor" /></button
 				>
-					<SkipForward size={24} fill="currentColor" />
-				</button>
-				<button class="relative text-[#FF6B4A] transition-colors active:scale-95">
-					<Repeat size={20} />
-					<div
-						class="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[#FF6B4A]"
-					></div>
-				</button>
+				<button class="text-gray-400 hover:text-white"><Shuffle size={18} /></button>
+			</div>
+			<div class="flex w-full items-center gap-3">
+				<span class="w-10 text-right text-xs text-gray-400 tabular-nums"
+					>{formatTime(media.currentTime)}</span
+				>
+				<input
+					type="range"
+					min="0"
+					max={media.duration || 100}
+					value={media.currentTime}
+					oninput={handleSeek}
+					style="background-size: {media.duration
+						? (media.currentTime / media.duration) * 100
+						: 0}% 100%;"
+					class="accent-primary-container from-primary-container to-primary-container h-1 flex-1 cursor-pointer appearance-none rounded-full bg-[#2A3241] bg-gradient-to-r bg-no-repeat"
+				/>
+				<span class="w-10 text-xs text-gray-400 tabular-nums">{formatTime(media.duration)}</span>
 			</div>
 		</div>
 
-		<!-- Volume & Extra Actions -->
-		<div class="flex w-1/3 min-w-[200px] items-center justify-end gap-4">
-			<div class="w-20 text-right font-mono text-xs text-gray-400">
-				{formatTime(currentTime)} / {formatTime(duration)}
-			</div>
-			<div class="mx-1 h-6 w-px bg-[#2A3241]"></div>
-			<button class="text-gray-400 transition-colors hover:text-white">
-				<ListMusic size={20} />
-			</button>
+		<!-- Right: Volume & Extras -->
+		<div class="flex w-1/3 justify-end gap-4 pr-2">
+			<button class="text-gray-400 hover:text-white"><ListMusic size={18} /></button>
 			<div class="group flex items-center gap-2">
 				<button
-					class="text-gray-400 transition-colors hover:text-white"
-					onclick={() => (volume = volume === 0 ? 1 : 0)}
+					class="text-gray-400 hover:text-white"
+					onclick={() => (media.volume = media.volume === 0 ? 1 : 0)}
 				>
-					<Volume2 size={20} />
+					<Volume2 size={18} />
 				</button>
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div
-					class="h-1 w-16 cursor-pointer overflow-hidden rounded-full border border-[#2A3241] bg-[#10131a]"
-					onclick={handleVolume}
-				>
-					<div
-						class="h-full bg-[#FF6B4A] transition-colors group-hover:bg-[#FF8264]"
-						style="width: {volume * 100}%"
-					></div>
-				</div>
+				<input
+					type="range"
+					min="0"
+					max="1"
+					step="0.01"
+					value={media.volume}
+					oninput={handleVolume}
+					style="background-size: {media.volume * 100}% 100%;"
+					class="h-1 w-24 cursor-pointer appearance-none rounded-full bg-[#2A3241] bg-gradient-to-r from-white to-white bg-no-repeat accent-white opacity-0 transition-opacity group-hover:opacity-100"
+				/>
 			</div>
 		</div>
 	</div>
-</div>
+{/if}

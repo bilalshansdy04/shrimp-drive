@@ -16,6 +16,8 @@
 	import { invalidateAll } from '$app/navigation';
 	import { toast, Toaster } from 'svelte-sonner';
 	import { formatBytes } from '$lib/utils';
+	import { media } from '$lib/client/mediaState.svelte';
+	import { page } from '$app/stores';
 	import '../../app.css';
 
 	let { data, children } = $props();
@@ -219,21 +221,45 @@
 				</div>
 
 				<div class="hidden items-center gap-2 lg:flex">
-					<button
-						class="flex items-center gap-1 rounded-full border border-[#2A3241] bg-[#151921] px-3 py-1.5 text-xs text-gray-300 transition-colors hover:text-white"
-					>
-						All
-					</button>
-					<button
-						class="flex items-center gap-1 rounded-full border border-[#2A3241] bg-[#151921] px-3 py-1.5 text-xs text-gray-300 transition-colors hover:text-white"
-					>
-						Audio
-					</button>
-					<button
-						class="flex items-center gap-1 rounded-full border border-[#2A3241] bg-[#151921] px-3 py-1.5 text-xs text-gray-300 transition-colors hover:text-white"
-					>
-						Video
-					</button>
+					{#if $page.url.pathname !== '/music' && media.currentTrack}
+						<!-- Mini Player -->
+						<div class="flex items-center gap-3 rounded-full border border-[#2A3241] bg-[#151921] px-4 py-1.5 shadow-sm">
+							{#if media.currentTrack.thumbnailUrl}
+								<img 
+									src={media.currentTrack.thumbnailUrl} 
+									alt="Cover" 
+									class="h-6 w-6 rounded object-cover"
+								/>
+							{:else}
+								<div class="flex h-6 w-6 items-center justify-center rounded bg-[#2A3241] text-gray-500">
+									<Music size={12} />
+								</div>
+							{/if}
+							
+							<div class="flex max-w-[120px] flex-col overflow-hidden">
+								<span class="truncate text-xs font-medium text-white">{media.currentTrack.title || media.currentTrack.fileName}</span>
+							</div>
+
+							<div class="ml-2 flex items-center gap-2 border-l border-[#2A3241] pl-3">
+								<button 
+									onclick={() => media.togglePlay()}
+									class="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
+								>
+									{#if media.isPaused}
+										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+									{:else}
+										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+									{/if}
+								</button>
+								<button 
+									onclick={() => media.playNext()}
+									class="text-gray-400 transition-colors hover:text-white"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+								</button>
+							</div>
+						</div>
+					{/if}
 				</div>
 			</div>
 
@@ -256,3 +282,14 @@
 		</div>
 	</main>
 </div>
+
+<!-- Global Audio Element -->
+<audio
+	bind:currentTime={media.currentTime}
+	bind:duration={media.duration}
+	bind:paused={media.isPaused}
+	bind:volume={media.volume}
+	src={media.currentTrack ? `/api/files/${media.currentTrack.id}/download` : undefined}
+	onended={() => media.playNext()}
+	autoplay
+></audio>
