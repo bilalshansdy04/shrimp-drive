@@ -8,7 +8,7 @@ const SESSION_EXPIRY = 1000 * 60 * 60 * 24 * 30; // 30 days
 
 export function generateSessionToken(): string {
 	// 32 random bytes -> 64 hex chars
-	return crypto.randomUUID() + crypto.randomUUID(); 
+	return crypto.randomBytes(32).toString('hex');
 }
 
 export async function createSession(token: string, userId: string) {

@@ -19,5 +19,8 @@ export default defineConfig({
 				}
 			}
 		})
-	]
+	],
+	ssr: {
+		noExternal: ['svelte-sonner']
+	}
 });

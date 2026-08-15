@@ -13,10 +13,94 @@
 		LogOut
 	} from 'lucide-svelte';
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { toast, Toaster } from 'svelte-sonner';
+	import { formatBytes } from '$lib/utils';
 	import '../../app.css';
 
 	let { data, children } = $props();
+
+	let fileInput: HTMLInputElement;
+	let isUploading = $state(false);
+	let uploadProgress = $state(0);
+	let toastId: string | number | undefined;
+
+	let storagePercentage = $derived(
+		data.user ? Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
+	);
+
+	function handleUpload(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const file = target.files?.[0];
+		if (!file) return;
+
+		if (file.size > 20 * 1024 * 1024) {
+			toast.error('File exceeds 20MB limit.');
+			target.value = '';
+			return;
+		}
+
+		isUploading = true;
+		uploadProgress = 0;
+		toastId = toast.loading('Starting upload...', { 
+			description: '0%'
+		});
+
+		const formData = new FormData();
+		formData.append('file', file);
+
+		const xhr = new XMLHttpRequest();
+		let lastProgress = -1;
+        
+		xhr.upload.addEventListener('progress', (event) => {
+			if (event.lengthComputable) {
+				const currentProgress = Math.round((event.loaded / event.total) * 100);
+				if (currentProgress !== lastProgress) {
+					lastProgress = currentProgress;
+					
+					if (currentProgress < 100) {
+						toast.loading('Uploading to server...', {
+							id: toastId,
+							description: `${currentProgress}% - Sending file...`
+						});
+					} else {
+						toast.loading('Processing...', {
+							id: toastId,
+							description: `100% - Saving to secure vault (Telegram). This might take a moment...`
+						});
+					}
+				}
+			}
+		});
+
+		xhr.addEventListener('load', async () => {
+			if (xhr.status >= 200 && xhr.status < 300) {
+				toast.success('Upload complete!', { id: toastId, description: 'File saved successfully.' });
+				await invalidateAll();
+			} else {
+				try {
+					const responseData = JSON.parse(xhr.responseText);
+					toast.error(responseData.error || 'Upload failed', { id: toastId, description: '' });
+				} catch {
+					toast.error('Upload failed', { id: toastId, description: '' });
+				}
+			}
+			isUploading = false;
+			target.value = '';
+		});
+
+		xhr.addEventListener('error', () => {
+			toast.error('Connection timeout or network error.', { id: toastId, description: '' });
+			isUploading = false;
+			target.value = '';
+		});
+
+		xhr.open('POST', '/api/files/upload');
+		xhr.send(formData);
+	}
 </script>
+
+<Toaster theme="dark" position="top-right" offset="80px" />
 
 <div class="flex h-screen w-full overflow-hidden bg-[#0B0E14] text-white">
 	<!-- Sidebar -->
@@ -92,10 +176,10 @@
 			<div class="mb-4">
 				<div class="mb-2 flex justify-between text-xs text-gray-400">
 					<span>Storage (Telegram)</span>
-					<span>2.4 GB / 8.0 GB</span>
+					<span>{formatBytes(data.user?.storageUsed || 0)} / {formatBytes(data.user?.storageLimit || 0)}</span>
 				</div>
 				<div class="h-1.5 w-full overflow-hidden rounded-full bg-[#0B0E14]">
-					<div class="h-full rounded-full bg-[#FF6B4A]" style="width: 30%;"></div>
+					<div class="h-full rounded-full bg-[#FF6B4A] transition-all duration-1000 ease-out" style="width: {storagePercentage}%;"></div>
 				</div>
 			</div>
 
@@ -154,11 +238,14 @@
 			</div>
 
 			<div class="ml-auto flex items-center gap-4 pl-4">
+				<input type="file" class="hidden" bind:this={fileInput} onchange={handleUpload} />
 				<button
-					class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FF8266]"
+					onclick={() => fileInput.click()}
+					disabled={isUploading}
+					class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FF8266] disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					<UploadCloud size={18} />
-					Upload File
+					{isUploading ? 'Uploading...' : 'Upload File'}
 				</button>
 			</div>
 		</header>
