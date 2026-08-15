@@ -70,6 +70,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			} catch (e) {
 				console.error('Failed to extract audio metadata:', e);
 			}
+		} else if (fileType === 'video') {
+			const videoThumbnail = formData.get('videoThumbnail') as string | null;
+			const videoDuration = formData.get('videoDuration') as string | null;
+			if (videoThumbnail) {
+				metadata.thumbnailUrl = videoThumbnail;
+			}
+			if (videoDuration) {
+				metadata.duration = parseFloat(videoDuration);
+			}
 		}
 
 		// Upload to Telegram

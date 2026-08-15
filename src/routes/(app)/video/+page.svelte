@@ -1,177 +1,96 @@
 <script lang="ts">
-  import { Filter, List, LayoutGrid, Video, PlayCircle, Download, Trash2, ChevronLeft, ChevronRight } from "lucide-svelte";
+	import { Film, Play, Clock } from 'lucide-svelte';
+	import type { PageData } from './$types';
+
+	const { data }: { data: PageData } = $props();
+	const videoFiles = $derived(data.videoFiles);
+
+	function formatTime(seconds: number | null) {
+		if (!seconds || isNaN(seconds)) return '0:00';
+		const m = Math.floor(seconds / 60);
+		const s = Math.floor(seconds % 60);
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
+
+	function formatDate(date: Date | string | null) {
+		if (!date) return 'Unknown date';
+		return new Date(date).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
+	}
 </script>
 
-<div class="max-w-[1280px] mx-auto">
-  <!-- Header Section -->
-  <div class="flex justify-between items-end mb-6">
-    <div>
-      <h2 class="text-3xl font-bold text-white mb-1">Video Hub</h2>
-      <p class="text-sm text-gray-400">Manage and preview your high-resolution renders and exports.</p>
-    </div>
-    
-    <!-- Contextual Filters/View Controls -->
-    <div class="flex gap-2">
-      <button class="p-2 rounded-lg bg-[#10131a] border border-[#2A3241] text-gray-400 hover:bg-[#1E2430] hover:text-white transition-colors duration-150" title="Filter Options">
-        <Filter size={20} />
-      </button>
-      <div class="flex bg-[#0B0E14] border border-[#2A3241] rounded-lg p-0.5">
-        <button class="p-1.5 rounded bg-[#151921] text-[#FF6B4A] shadow-sm" title="List View">
-          <List size={20} />
-        </button>
-        <button class="p-1.5 rounded text-gray-400 hover:text-white hover:bg-[#1E2430]" title="Grid View">
-          <LayoutGrid size={20} />
-        </button>
-      </div>
-    </div>
-  </div>
+<div class="flex h-full flex-col overflow-y-auto p-6">
+	<div class="mb-8 flex items-end justify-between">
+		<div>
+			<h1 class="text-3xl font-bold text-white">Video Hub</h1>
+			<p class="mt-2 text-gray-400">Watch and manage your uploaded videos</p>
+		</div>
+	</div>
 
-  <!-- Data Table Container -->
-  <div class="bg-[#151921] border border-[#2A3241] rounded-2xl overflow-hidden shadow-lg">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse whitespace-nowrap">
-        <thead>
-          <tr class="bg-[#10131a] border-b border-[#2A3241]">
-            <th class="py-4 px-6 text-xs font-medium text-gray-400 uppercase tracking-wider w-2/5">Name</th>
-            <th class="py-4 px-4 text-xs font-medium text-gray-400 uppercase tracking-wider">Duration</th>
-            <th class="py-4 px-4 text-xs font-medium text-gray-400 uppercase tracking-wider">Resolution</th>
-            <th class="py-4 px-4 text-xs font-medium text-gray-400 uppercase tracking-wider text-right">Size</th>
-            <th class="py-4 px-4 text-xs font-medium text-gray-400 uppercase tracking-wider text-right">Date Uploaded</th>
-            <th class="py-4 px-6 text-xs font-medium text-gray-400 uppercase tracking-wider text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-[#2A3241]">
-          <!-- Row 1 -->
-          <tr class="group hover:bg-[#1E2430] transition-colors duration-150">
-            <td class="py-3 px-6">
-              <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded bg-[#0B0E14] border border-[#2A3241] flex items-center justify-center text-[#FF6B4A] relative overflow-hidden">
-                  <div class="absolute inset-0 bg-[#FF6B4A] opacity-5"></div>
-                  <Video size={20} />
-                </div>
-                <span class="text-sm text-white group-hover:text-[#FF6B4A] transition-colors duration-150 cursor-pointer">Project_Alpha_Final_Render_v3.mp4</span>
-              </div>
-            </td>
-            <td class="py-3 px-4 text-sm text-gray-400">00:12:45</td>
-            <td class="py-3 px-4 text-sm text-gray-400">4K UHD (3840x2160)</td>
-            <td class="py-3 px-4 text-sm text-gray-400 text-right tabular-nums">4.2 GB</td>
-            <td class="py-3 px-4 text-sm text-gray-400 text-right">Oct 24, 2023</td>
-            <td class="py-3 px-6 text-right">
-              <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                <button class="p-1.5 text-gray-400 hover:text-[#FF6B4A] transition-colors" title="Play">
-                  <PlayCircle size={20} />
-                </button>
-                <button class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Download">
-                  <Download size={20} />
-                </button>
-                <button class="p-1.5 text-gray-400 hover:text-[#ffb4ab] transition-colors" title="Delete">
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </td>
-          </tr>
-          
-          <!-- Row 2 -->
-          <tr class="group hover:bg-[#1E2430] transition-colors duration-150">
-            <td class="py-3 px-6">
-              <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded bg-[#0B0E14] border border-[#2A3241] flex items-center justify-center text-gray-400">
-                  <Video size={20} />
-                </div>
-                <span class="text-sm text-white group-hover:text-[#FF6B4A] transition-colors duration-150 cursor-pointer">Q3_Marketing_B-Roll_Raw.mxf</span>
-              </div>
-            </td>
-            <td class="py-3 px-4 text-sm text-gray-400">01:05:22</td>
-            <td class="py-3 px-4 text-sm text-gray-400">1080p (1920x1080)</td>
-            <td class="py-3 px-4 text-sm text-gray-400 text-right tabular-nums">18.5 GB</td>
-            <td class="py-3 px-4 text-sm text-gray-400 text-right">Oct 22, 2023</td>
-            <td class="py-3 px-6 text-right">
-              <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                <button class="p-1.5 text-gray-400 hover:text-[#FF6B4A] transition-colors" title="Play">
-                  <PlayCircle size={20} />
-                </button>
-                <button class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Download">
-                  <Download size={20} />
-                </button>
-                <button class="p-1.5 text-gray-400 hover:text-[#ffb4ab] transition-colors" title="Delete">
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </td>
-          </tr>
-          
-          <!-- Row 3 -->
-          <tr class="group hover:bg-[#1E2430] transition-colors duration-150">
-            <td class="py-3 px-6">
-              <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded bg-[#0B0E14] border border-[#2A3241] flex items-center justify-center text-gray-400">
-                  <Video size={20} />
-                </div>
-                <span class="text-sm text-white group-hover:text-[#FF6B4A] transition-colors duration-150 cursor-pointer">Client_Interview_Sync_01.mov</span>
-              </div>
-            </td>
-            <td class="py-3 px-4 text-sm text-gray-400">00:45:10</td>
-            <td class="py-3 px-4 text-sm text-gray-400">4K UHD (3840x2160)</td>
-            <td class="py-3 px-4 text-sm text-gray-400 text-right tabular-nums">12.1 GB</td>
-            <td class="py-3 px-4 text-sm text-gray-400 text-right">Oct 18, 2023</td>
-            <td class="py-3 px-6 text-right">
-              <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                <button class="p-1.5 text-gray-400 hover:text-[#FF6B4A] transition-colors" title="Play">
-                  <PlayCircle size={20} />
-                </button>
-                <button class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Download">
-                  <Download size={20} />
-                </button>
-                <button class="p-1.5 text-gray-400 hover:text-[#ffb4ab] transition-colors" title="Delete">
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </td>
-          </tr>
-          
-          <!-- Row 4 -->
-          <tr class="group hover:bg-[#1E2430] transition-colors duration-150">
-            <td class="py-3 px-6">
-              <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded bg-[#0B0E14] border border-[#2A3241] flex items-center justify-center text-gray-400">
-                  <Video size={20} />
-                </div>
-                <span class="text-sm text-white group-hover:text-[#FF6B4A] transition-colors duration-150 cursor-pointer">Social_Teaser_Vertical.mp4</span>
-              </div>
-            </td>
-            <td class="py-3 px-4 text-sm text-gray-400">00:00:30</td>
-            <td class="py-3 px-4 text-sm text-gray-400">1080x1920</td>
-            <td class="py-3 px-4 text-sm text-gray-400 text-right tabular-nums">150 MB</td>
-            <td class="py-3 px-4 text-sm text-gray-400 text-right">Oct 15, 2023</td>
-            <td class="py-3 px-6 text-right">
-              <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                <button class="p-1.5 text-gray-400 hover:text-[#FF6B4A] transition-colors" title="Play">
-                  <PlayCircle size={20} />
-                </button>
-                <button class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Download">
-                  <Download size={20} />
-                </button>
-                <button class="p-1.5 text-gray-400 hover:text-[#ffb4ab] transition-colors" title="Delete">
-                  <Trash2 size={20} />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    
-    <!-- Table Footer / Pagination -->
-    <div class="bg-[#10131a] border-t border-[#2A3241] px-6 py-3 flex items-center justify-between">
-      <span class="text-sm text-gray-400">Showing 1 to 4 of 42 entries</span>
-      <div class="flex gap-2">
-        <button class="p-1.5 rounded text-[#2A3241] cursor-not-allowed">
-          <ChevronLeft size={20} />
-        </button>
-        <button class="p-1.5 rounded text-gray-400 hover:text-white hover:bg-[#1E2430] transition-colors">
-          <ChevronRight size={20} />
-        </button>
-      </div>
-    </div>
-  </div>
+	{#if videoFiles.length === 0}
+		<div
+			class="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-[#2A3241] p-12 text-center"
+		>
+			<div class="mb-4 rounded-full bg-[#151921] p-4 text-gray-400">
+				<Film size={48} />
+			</div>
+			<h3 class="mb-2 text-xl font-bold text-white">No videos yet</h3>
+			<p class="max-w-sm text-gray-400">
+				Upload your first video to start building your personal cinema.
+			</p>
+		</div>
+	{:else}
+		<div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+			{#each videoFiles as video}
+				<a
+					href={`/video/${video.id}`}
+					class="group hover:border-primary-container relative flex flex-col overflow-hidden rounded-xl border border-[#2A3241] bg-[#151921] transition-all hover:-translate-y-1 hover:shadow-lg"
+				>
+					<div class="relative aspect-video w-full overflow-hidden bg-[#0B0E14]">
+						{#if video.thumbnailUrl}
+							<img
+								src={video.thumbnailUrl}
+								alt={video.fileName}
+								class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+							/>
+						{:else}
+							<div class="flex h-full w-full items-center justify-center text-gray-500">
+								<Film size={32} />
+							</div>
+						{/if}
+						<div
+							class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+						>
+							<div
+								class="bg-primary-container scale-75 transform rounded-full p-3 text-black transition-transform group-hover:scale-100"
+							>
+								<Play size={24} fill="currentColor" class="ml-1" />
+							</div>
+						</div>
+						<div
+							class="absolute right-2 bottom-2 rounded bg-black/80 px-2 py-1 text-xs font-medium text-white shadow backdrop-blur-sm"
+						>
+							{formatTime(video.duration)}
+						</div>
+					</div>
+					<div class="p-4">
+						<h3
+							class="mb-1 truncate text-base font-semibold text-white"
+							title={video.title || video.fileName}
+						>
+							{video.title || video.fileName}
+						</h3>
+						<div class="flex items-center gap-3 text-xs text-gray-400">
+							<span>{formatDate(video.createdAt)}</span>
+							<span class="h-1 w-1 rounded-full bg-gray-600"></span>
+							<span>{(video.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
+						</div>
+					</div>
+				</a>
+			{/each}
+		</div>
+	{/if}
 </div>

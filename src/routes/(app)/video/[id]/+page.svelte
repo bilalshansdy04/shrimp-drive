@@ -1,73 +1,164 @@
 <script lang="ts">
-  import { page } from "$app/stores";
-  import { ArrowLeft, Play, Volume2, PictureInPicture2, Maximize } from "lucide-svelte";
+	import { ArrowLeft, Play, Pause, Volume2, Maximize } from 'lucide-svelte';
+	import type { PageData } from './$types';
+	import { media } from '$lib/client/mediaState.svelte';
+	import { onMount } from 'svelte';
+
+	const { data }: { data: PageData } = $props();
+	const { videoFile } = data;
+
+	let videoElement: HTMLVideoElement | undefined = $state();
+	let containerElement: HTMLDivElement | undefined = $state();
+	let isBuffering = $state(true);
+
+	let displayDuration = $derived(
+		media.duration && !isNaN(media.duration) ? media.duration : videoFile.duration
+	);
+
+	function formatTime(seconds: number | null) {
+		if (!seconds || isNaN(seconds)) return '0:00';
+		const m = Math.floor(seconds / 60);
+		const s = Math.floor(seconds % 60);
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
+
+	onMount(() => {
+		// Set this video as the current track in the global media state
+		if (media.currentTrack?.id !== videoFile.id) {
+			media.playTrack(0, [videoFile]);
+		}
+	});
+
+	function handleSeek(e: Event) {
+		const target = e.target as HTMLInputElement;
+		media.currentTime = Number(target.value);
+	}
+
+	function handleVolume(e: Event) {
+		const target = e.target as HTMLInputElement;
+		media.volume = Number(target.value);
+	}
+
+	function toggleFullscreen() {
+		if (!document.fullscreenElement) {
+			containerElement?.requestFullscreen().catch((err) => {
+				console.error(`Error attempting to enable fullscreen: ${err.message}`);
+			});
+		} else {
+			document.exitFullscreen();
+		}
+	}
 </script>
 
-<div class="max-w-6xl mx-auto flex flex-col gap-8">
-  <!-- Video Player & Details -->
-  <div class="flex flex-col gap-4">
-    <!-- Video Metadata Area -->
-    <div class="flex items-center justify-between gap-4 mb-2">
-      <div class="flex flex-col">
-        <a href="/video" class="flex items-center gap-2 px-3 py-1.5 -ml-3 rounded-lg text-gray-400 hover:text-white hover:bg-[#1E2430] transition-all duration-150 group mb-2 w-fit">
-          <ArrowLeft size={20} />
-          <span class="text-sm font-medium">Back to Library</span>
-        </a>
-        <h2 class="text-3xl font-bold text-white tracking-tight">Video {$page.params.id}</h2>
-      </div>
-    </div>
-    
-    <!-- Video Player Container (Level 1 Surface) -->
-    <div class="w-full aspect-video bg-black rounded-2xl border border-[#2A3241] overflow-hidden relative group shadow-[0_10px_25px_-5px_rgba(0,0,0,0.5)]">
-      <!-- Video Output/Placeholder -->
-      <div class="w-full h-full relative">
-        <img class="w-full h-full object-cover opacity-80" alt="Video Placeholder" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9KS5xFEJCyvoAcyLdeN7A3A2ZlGAJP0P7EHcDfCNfIxseNE5QYNRcoA6RkWhSmbnWZgB7ZC6cjLR0z2W2bCj1CgtA2TZor71pxCbwxda7m_cqYhH9Dn79bQ28s1_orYAOs_JqI5mW8ETzCPF9bZmExw2tz_8zRHtOvwdAjOPMyk72sFM9OvSvpEgKEN47BiOQTAodtniMmN6q75dPrdCTjfuNrGKtQyQfmjsQAZflfhprooQr1Dzz">
-        <!-- Overlay Gradient for Controls visibility -->
-        <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-      </div>
-      
-      <!-- Custom Controls Overlay -->
-      <div class="absolute bottom-0 left-0 w-full p-4 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform translate-y-2 group-hover:translate-y-0">
-        <!-- Progress Bar -->
-        <div class="w-full flex items-center h-2 cursor-pointer group/progress relative">
-          <input class="absolute top-1/2 -translate-y-1/2 z-10 w-full cursor-pointer appearance-none bg-transparent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#FF6B4A] [&::-webkit-slider-thumb]:opacity-0 group-hover/progress:[&::-webkit-slider-thumb]:opacity-100 [&::-webkit-slider-thumb]:transition-opacity [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:bg-gradient-to-r [&::-webkit-slider-runnable-track]:from-[#FF6B4A] [&::-webkit-slider-runnable-track]:from-[35%] [&::-webkit-slider-runnable-track]:to-[#2A3241] [&::-webkit-slider-runnable-track]:to-[35%] [&::-webkit-slider-runnable-track]:rounded-full" max="100" min="0" type="range" value="35">
-        </div>
-        
-        <!-- Control Buttons Row -->
-        <div class="flex items-center justify-between mt-2">
-          <!-- Left Controls -->
-          <div class="flex items-center gap-4">
-            <button class="text-white hover:text-[#FF6B4A] transition-colors flex items-center justify-center">
-              <Play size={24} fill="currentColor" />
-            </button>
-            <button class="text-white hover:text-[#FF6B4A] transition-colors flex items-center justify-center group/vol">
-              <Volume2 size={20} />
-            </button>
-            <div class="text-sm text-gray-400 flex items-center gap-1 ml-2 font-mono">
-              <span class="text-white">02:14</span>
-              <span>/</span>
-              <span>06:45</span>
-            </div>
-          </div>
-          
-          <!-- Right Controls -->
-          <div class="flex items-center gap-3">
-            <button class="px-2 py-1 rounded bg-[#10131a]/50 backdrop-blur border border-[#2A3241] text-xs font-medium text-white hover:border-[#FF6B4A] hover:text-[#FF6B4A] transition-colors">
-              1.0x
-            </button>
-            <button class="px-2 py-1 rounded bg-[#10131a]/50 backdrop-blur border border-[#2A3241] text-xs font-medium text-white hover:border-[#FF6B4A] hover:text-[#FF6B4A] transition-colors">
-              1080p
-            </button>
-            <div class="w-px h-4 bg-[#2A3241] mx-1"></div>
-            <button class="text-white hover:text-[#FF6B4A] transition-colors flex items-center justify-center">
-              <PictureInPicture2 size={20} />
-            </button>
-            <button class="text-white hover:text-[#FF6B4A] transition-colors flex items-center justify-center">
-              <Maximize size={20} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="group relative flex h-full flex-col bg-[#0B0E14] overflow-hidden rounded-xl" bind:this={containerElement}>
+	<!-- Header -->
+	<div
+		class="absolute left-0 right-0 top-0 z-10 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+	>
+		<a
+			href="/video"
+			class="rounded-full bg-black/40 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/60"
+			onclick={() => { media.isPaused = true; }}
+		>
+			<ArrowLeft size={20} />
+		</a>
+		<div class="min-w-0 flex-1">
+			<h1 class="truncate text-lg font-bold text-white drop-shadow-md shadow-black">
+				{videoFile.title || videoFile.fileName}
+			</h1>
+		</div>
+	</div>
+
+	<!-- Video Player Area -->
+	<div class="relative flex flex-1 items-center justify-center overflow-hidden bg-black">
+		<!-- svelte-ignore a11y_media_has_caption -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+		<video
+			bind:this={videoElement}
+			bind:currentTime={media.currentTime}
+			bind:duration={media.duration}
+			bind:paused={media.isPaused}
+			bind:volume={media.volume}
+			src={`/api/files/${videoFile.id}/download`}
+			class="h-full w-full object-contain"
+			autoplay
+			onclick={() => media.togglePlay()}
+			onwaiting={() => isBuffering = true}
+			onplaying={() => isBuffering = false}
+			oncanplay={() => isBuffering = false}
+			onpause={() => isBuffering = false}
+			onloadeddata={() => isBuffering = false}
+		></video>
+
+		{#if isBuffering}
+			<div class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50">
+				<div class="h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-primary-container shadow-lg"></div>
+			</div>
+		{/if}
+
+		<!-- Custom Controls Overlay -->
+		<div
+			class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+		>
+			<!-- Progress Bar -->
+			<div class="mb-4 flex items-center gap-3">
+				<span class="w-12 font-mono text-sm text-white text-right">{formatTime(media.currentTime)}</span>
+				<input
+					type="range"
+					min="0"
+					max={displayDuration || 100}
+					value={media.currentTime}
+					oninput={handleSeek}
+					style="background-size: {displayDuration
+						? (media.currentTime / displayDuration) * 100
+						: 0}% 100%;"
+					class="from-primary-container to-primary-container accent-primary-container h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-white/20 bg-gradient-to-r bg-no-repeat"
+				/>
+				<span class="w-12 font-mono text-sm text-white">{formatTime(displayDuration)}</span>
+			</div>
+
+			<!-- Bottom Controls -->
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-6">
+					<button
+						class="hover:text-primary-container text-white transition-colors"
+						onclick={() => media.togglePlay()}
+					>
+						{#if media.isPaused}
+							<Play size={28} fill="currentColor" />
+						{:else}
+							<Pause size={28} fill="currentColor" />
+						{/if}
+					</button>
+
+					<div class="group/vol flex items-center gap-2">
+						<button
+							class="hover:text-primary-container text-white transition-colors"
+							onclick={() => (media.volume = media.volume === 0 ? 1 : 0)}
+						>
+							<Volume2 size={24} />
+						</button>
+						<input
+							type="range"
+							min="0"
+							max="1"
+							step="0.01"
+							value={media.volume}
+							oninput={handleVolume}
+							style="background-size: {media.volume * 100}% 100%;"
+							class="h-1.5 w-24 cursor-pointer appearance-none rounded-full bg-white/20 bg-gradient-to-r from-white to-white bg-no-repeat accent-white opacity-0 transition-opacity group-hover/vol:opacity-100"
+						/>
+					</div>
+				</div>
+
+				<button
+					class="hover:text-primary-container text-white transition-colors"
+					onclick={toggleFullscreen}
+				>
+					<Maximize size={24} />
+				</button>
+			</div>
+		</div>
+	</div>
 </div>

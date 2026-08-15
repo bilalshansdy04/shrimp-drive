@@ -20,6 +20,15 @@
 	import { page } from '$app/stores';
 	import '../../app.css';
 
+	let isMusicRoute = $derived($page.url.pathname === '/music');
+	let isTheatreRoute = $derived($page.url.pathname.startsWith('/video/') && $page.url.pathname.length > 7);
+	let hideMiniPlayer = $derived(
+		media.currentTrack
+			? (media.currentTrack.fileType === 'audio' && isMusicRoute) ||
+				(media.currentTrack.fileType === 'video' && isTheatreRoute)
+			: true
+	);
+
 	let { data, children } = $props();
 
 	let fileInput: HTMLInputElement;
@@ -31,7 +40,7 @@
 		data.user ? Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
 	);
 
-	function handleUpload(e: Event) {
+	async function handleUpload(e: Event) {
 		const target = e.target as HTMLInputElement;
 		const file = target.files?.[0];
 		if (!file) return;
@@ -42,14 +51,77 @@
 			return;
 		}
 
-		isUploading = true;
-		uploadProgress = 0;
-		toastId = toast.loading('Starting upload...', { 
-			description: '0%'
-		});
-
 		const formData = new FormData();
 		formData.append('file', file);
+
+		if (file.type.startsWith('video/')) {
+			toastId = toast.loading('Extracting thumbnail...', { description: 'Processing video frame' });
+			try {
+				const videoInfo = await new Promise<{ dataUrl: string | null; duration: number }>((resolve) => {
+					const video = document.createElement('video');
+					video.preload = 'metadata';
+					video.muted = true;
+					video.src = URL.createObjectURL(file);
+					
+					video.onloadedmetadata = () => {
+						// Wait for duration to be valid
+						if (video.duration === Infinity) {
+							video.currentTime = 1e101;
+							video.ontimeupdate = () => {
+								video.ontimeupdate = null;
+								video.currentTime = 0;
+								// Now duration is known
+							};
+						}
+					};
+
+					video.onloadeddata = () => {
+						// Ensure it's a valid number before seeking
+						const safeDuration = isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
+						video.currentTime = Math.min(1, safeDuration / 2 || 0);
+					};
+
+					video.onseeked = () => {
+						const canvas = document.createElement('canvas');
+						const ctx = canvas.getContext('2d');
+						const safeDuration = isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
+						if (!ctx) return resolve({ dataUrl: null, duration: safeDuration });
+
+						const maxWidth = 320;
+						const scale = Math.min(1, maxWidth / video.videoWidth);
+						canvas.width = video.videoWidth * scale;
+						canvas.height = video.videoHeight * scale;
+
+						ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+						const dataUrl = canvas.toDataURL('image/webp', 0.8);
+						URL.revokeObjectURL(video.src);
+						resolve({ dataUrl, duration: safeDuration });
+					};
+
+					video.onerror = () => {
+						URL.revokeObjectURL(video.src);
+						resolve({ dataUrl: null, duration: 0 });
+					};
+				});
+
+				if (videoInfo.dataUrl) {
+					formData.append('videoThumbnail', videoInfo.dataUrl);
+				}
+				if (videoInfo.duration > 0) {
+					formData.append('videoDuration', videoInfo.duration.toString());
+				}
+			} catch (e) {
+				console.error('Thumbnail extraction failed', e);
+			}
+		}
+
+		isUploading = true;
+		uploadProgress = 0;
+		if (!toastId) {
+			toastId = toast.loading('Starting upload...', { description: '0%' });
+		} else {
+			toast.loading('Starting upload...', { id: toastId, description: '0%' });
+		}
 
 		const xhr = new XMLHttpRequest();
 		let lastProgress = -1;
@@ -149,7 +221,7 @@
 						Music
 					</a>
 					<a
-						href="/video"
+						href={media.currentTrack?.fileType === 'video' ? `/video/${media.currentTrack.id}` : "/video"}
 						class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-[#2A3241] hover:text-white"
 					>
 						<Video size={18} />
@@ -221,7 +293,7 @@
 				</div>
 
 				<div class="hidden items-center gap-2 lg:flex">
-					{#if $page.url.pathname !== '/music' && media.currentTrack}
+					{#if media.currentTrack && !hideMiniPlayer}
 						<!-- Mini Player -->
 						<div class="flex items-center gap-3 rounded-full border border-[#2A3241] bg-[#151921] px-4 py-1.5 shadow-sm">
 							{#if media.currentTrack.thumbnailUrl}
@@ -232,7 +304,11 @@
 								/>
 							{:else}
 								<div class="flex h-6 w-6 items-center justify-center rounded bg-[#2A3241] text-gray-500">
-									<Music size={12} />
+									{#if media.currentTrack.fileType === 'video'}
+										<Video size={12} />
+									{:else}
+										<Music size={12} />
+									{/if}
 								</div>
 							{/if}
 							
@@ -283,7 +359,8 @@
 	</main>
 </div>
 
-<!-- Global Audio Element -->
+<!-- Global Audio Element (Muted/Unmounted if on dedicated video route to prevent overlap) -->
+{#if !($page.url.pathname.startsWith('/video/') && $page.url.pathname.length > 7)}
 <audio
 	bind:currentTime={media.currentTime}
 	bind:duration={media.duration}
@@ -293,3 +370,4 @@
 	onended={() => media.playNext()}
 	autoplay
 ></audio>
+{/if}

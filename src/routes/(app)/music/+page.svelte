@@ -22,8 +22,8 @@
 
 	let { data } = $props<{ data: PageData }>();
 
-	let audioFiles = data.audioFiles;
-	let totalSize = audioFiles.reduce((acc: number, f: any) => acc + f.fileSize, 0);
+	let audioFiles = $derived(data.audioFiles);
+	let totalSize = $derived(audioFiles.reduce((acc: number, f: any) => acc + f.fileSize, 0));
 
 	function formatBytes(bytes: number) {
 		if (bytes === 0) return '0 B';
@@ -33,7 +33,7 @@
 		return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 	}
 
-	function formatDate(dateString: string | null) {
+	function formatDate(dateString: Date | string | null) {
 		if (!dateString) return 'Unknown';
 		return new Date(dateString).toLocaleDateString('en-US', {
 			year: 'numeric',

@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { users, files } from '$lib/server/db/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, or, inArray } from 'drizzle-orm';
 import { getFileDownloadUrl, uploadFileToTelegram } from '$lib/server/telegram';
 import { parseBuffer } from 'music-metadata';
 
@@ -13,23 +13,23 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	const userId = locals.user.id;
 
-	// Find all audio files that are missing a thumbnailUrl
-	const audioFiles = await db
+	// Find all audio/video files that are missing a thumbnailUrl or duration
+	const mediaFiles = await db
 		.select()
 		.from(files)
 		.where(
 			and(
 				eq(files.userId, userId),
-				eq(files.fileType, 'audio'),
+				inArray(files.fileType, ['audio', 'video']),
 				isNull(files.deletedAt),
-				isNull(files.thumbnailUrl)
+				or(isNull(files.thumbnailUrl), isNull(files.duration))
 			)
 		);
 
 	let fixedCount = 0;
 	let errors = [];
 
-	for (const file of audioFiles) {
+	for (const file of mediaFiles) {
 		try {
 			const tgUrl = await getFileDownloadUrl(locals.user.telegramBotToken, file.telegramFileId);
 			const response = await fetch(tgUrl);
@@ -87,7 +87,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	return json({
 		success: true,
-		scanned: audioFiles.length,
+		scanned: mediaFiles.length,
 		fixed: fixedCount,
 		errors
 	});
