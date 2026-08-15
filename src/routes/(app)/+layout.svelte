@@ -53,6 +53,11 @@
 
 		const formData = new FormData();
 		formData.append('file', file);
+		
+		const currentFolderId = $page.url.searchParams.get('folder');
+		if (currentFolderId) {
+			formData.append('folderId', currentFolderId);
+		}
 
 		if (file.type.startsWith('video/')) {
 			toastId = toast.loading('Extracting thumbnail...', { description: 'Processing video frame' });

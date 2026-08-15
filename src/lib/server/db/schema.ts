@@ -15,12 +15,29 @@ export const users = sqliteTable("users", {
   ),
 });
 
-// 2. Files Table (Global Asset Registry)
+// 2. Folders Table (Virtual Directories)
+export const folders = sqliteTable("folders", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  name: text("name").notNull(),
+  category: text("category").notNull(), // 'audio' | 'video' | 'image' | 'document'
+  parentId: text("parent_id").references((): any => folders.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+  deletedAt: integer("deleted_at", { mode: "timestamp" }),
+});
+
+// 3. Files Table (Global Asset Registry)
 export const files = sqliteTable("files", {
   id: text("id").primaryKey(),
   userId: text("user_id")
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
+  folderId: text("folder_id")
+    .references(() => folders.id, { onDelete: "set null" }),
   fileName: text("file_name").notNull(),
   fileType: text("file_type").notNull(), // 'audio' | 'video' | 'image' | 'document'
   mimeType: text("mime_type").notNull(),

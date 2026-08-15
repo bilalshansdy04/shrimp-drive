@@ -38,6 +38,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const fileType = getFileType(file.type);
+		
+		const folderId = formData.get('folderId') as string | null;
+		
+		// Validate folder if provided
+		if (folderId) {
+			const { folders } = await import('$lib/server/db/schema');
+			const { and, eq } = await import('drizzle-orm');
+			
+			const targetFolder = await db.query.folders.findFirst({
+				where: and(eq(folders.id, folderId), eq(folders.userId, locals.user.id))
+			});
+			
+			if (!targetFolder) {
+				return json({ error: 'Target folder not found' }, { status: 404 });
+			}
+			
+			if (targetFolder.category !== fileType) {
+				return json({ error: `Cannot upload ${fileType} to a ${targetFolder.category} folder` }, { status: 400 });
+			}
+		}
+
 		let metadata: any = {};
 
 		if (fileType === 'audio') {
@@ -99,6 +120,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await db.insert(files).values({
 			id: fileId,
 			userId: locals.user.id,
+			folderId: folderId || null,
 			fileName: file.name,
 			fileType: fileType,
 			mimeType: file.type || 'application/octet-stream',

@@ -17,6 +17,7 @@
 	import type { PageData } from './$types';
 	import { enhance } from '$app/forms';
 	import { toast } from 'svelte-sonner';
+	import { media } from '$lib/client/mediaState.svelte';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -174,6 +175,7 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
+		role="region"
 		class="group mb-8 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#2A3241] bg-[#10131a] p-8 transition-colors duration-150 hover:bg-[#151921] hover:border-[#FF6B4A] {isDragging ? 'border-[#FF6B4A] bg-[#151921]' : ''}"
 		ondrop={handleDrop}
 		ondragover={(e) => { e.preventDefault(); isDragging = true; }}
@@ -230,10 +232,14 @@
 								<td class="p-4 text-right text-xs text-gray-400 tabular-nums">{formatDate(file.createdAt)}</td>
 								<td class="p-4 text-center">
 									<div class="flex items-center justify-center gap-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-										{#if file.fileType === 'audio' || file.fileType === 'video'}
-											<button class="text-[#FF6B4A] hover:text-[#FF8264]" title="Play"><Play size={18} /></button>
+										{#if file.fileType === 'audio'}
+											<button onclick={() => media.playTrack(0, [file])} class="text-[#FF6B4A] hover:text-[#FF8264]" title="Play"><Play size={18} /></button>
+										{:else if file.fileType === 'video'}
+											<a href="/video/{file.id}" class="text-[#FF6B4A] hover:text-[#FF8264]" title="Play"><Play size={18} /></a>
+										{:else if file.fileType === 'photo' || file.fileType === 'image'}
+											<a href="/photo?view={file.id}" class="text-[#FF6B4A] hover:text-[#FF8264]" title="View"><Eye size={18} /></a>
 										{:else}
-											<button class="text-[#FF6B4A] hover:text-[#FF8264]" title="View"><Eye size={18} /></button>
+											<a href="/api/files/{file.id}/download" target="_blank" class="text-[#FF6B4A] hover:text-[#FF8264]" title="View"><Eye size={18} /></a>
 										{/if}
 										<a href="/api/files/{file.id}/download" download class="text-gray-400 hover:text-white flex items-center justify-center" title="Download"><Download size={18} /></a>
 										<form method="POST" action="?/delete" class="inline flex items-center justify-center" use:enhance={() => {
