@@ -5,7 +5,7 @@ import { files } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getFileDownloadUrl } from '$lib/server/telegram';
 
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = async ({ request, params, locals }) => {
 	if (!locals.user) {
 		throw error(401, 'Unauthorized');
 	}
@@ -26,18 +26,40 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
 		const downloadUrl = await getFileDownloadUrl(locals.user.telegramBotToken, file.telegramFileId);
 		
-		const response = await fetch(downloadUrl);
+		const requestHeaders = new Headers();
+		const range = request.headers.get('Range');
+		if (range) {
+			requestHeaders.set('Range', range);
+		}
+		
+		const response = await fetch(downloadUrl, { headers: requestHeaders });
 		
 		if (!response.ok || !response.body) {
 			throw new Error('Failed to fetch file from Telegram');
 		}
 
+		const responseHeaders = new Headers();
+		responseHeaders.set('Content-Type', file.mimeType);
+		
+		const urlObj = new URL(request.url);
+		const isDownload = urlObj.searchParams.has('download');
+		const encodedFilename = encodeURIComponent(file.fileName);
+		responseHeaders.set('Content-Disposition', `${isDownload ? 'attachment' : 'inline'}; filename*=UTF-8''${encodedFilename}`);
+		
+		responseHeaders.set('Accept-Ranges', 'bytes');
+		if (response.headers.has('Content-Length')) {
+			responseHeaders.set('Content-Length', response.headers.get('Content-Length')!);
+		} else {
+			responseHeaders.set('Content-Length', file.fileSize.toString());
+		}
+
+		if (response.headers.has('Content-Range')) {
+			responseHeaders.set('Content-Range', response.headers.get('Content-Range')!);
+		}
+
 		return new Response(response.body, {
-			headers: {
-				'Content-Type': file.mimeType,
-				'Content-Disposition': `attachment; filename="${file.fileName}"`,
-				'Content-Length': file.fileSize.toString()
-			}
+			status: response.status,
+			headers: responseHeaders
 		});
 	} catch (err: any) {
 		console.error('Download error:', err);

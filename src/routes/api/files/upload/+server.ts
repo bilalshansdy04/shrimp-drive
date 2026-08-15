@@ -48,8 +48,25 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					title: audioMeta.common.title,
 					artist: audioMeta.common.artist,
 					album: audioMeta.common.album,
-					duration: audioMeta.format.duration
+					duration: audioMeta.format.duration,
+					thumbnailUrl: null as string | null
 				};
+				
+				if (audioMeta.common.picture && audioMeta.common.picture.length > 0) {
+					const pic = audioMeta.common.picture[0];
+					const picBlob = new Blob([pic.data as unknown as BlobPart], { type: pic.format });
+					try {
+						const picTgResult = await uploadFileToTelegram(
+							locals.user.telegramBotToken,
+							locals.user.telegramChatId,
+							picBlob,
+							'cover.jpg'
+						);
+						metadata.thumbnailUrl = `/api/files/thumbnail/${picTgResult.telegramFileId}`;
+					} catch (e) {
+						console.error('Failed to upload thumbnail to Telegram:', e);
+					}
+				}
 			} catch (e) {
 				console.error('Failed to extract audio metadata:', e);
 			}
@@ -76,7 +93,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			title: metadata.title,
 			artist: metadata.artist,
 			album: metadata.album,
-			duration: metadata.duration ? Math.round(metadata.duration) : null
+			duration: metadata.duration ? Math.round(metadata.duration) : null,
+			thumbnailUrl: metadata.thumbnailUrl || null
 		});
 
 		const newStorageUsed = locals.user.storageUsed + file.size;
