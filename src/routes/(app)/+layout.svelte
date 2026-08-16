@@ -17,6 +17,8 @@
 	import { toast, Toaster } from 'svelte-sonner';
 	import { formatBytes } from '$lib/utils';
 	import { media } from '$lib/client/mediaState.svelte';
+	import { uploadState } from '$lib/client/uploadState.svelte';
+	import UploadPanel from '$lib/components/UploadPanel.svelte';
 	import { page } from '$app/stores';
 	import '../../app.css';
 
@@ -32,184 +34,18 @@
 	let { data, children } = $props();
 
 	let fileInput: HTMLInputElement;
-	let isUploading = $state(false);
-	let uploadProgress = $state(0);
-	let toastId: string | number | undefined;
 
 	let storagePercentage = $derived(
 		data.user ? Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
 	);
 
-	async function handleUpload(e: Event) {
+	function handleUpload(e: Event) {
 		const target = e.target as HTMLInputElement;
-		const file = target.files?.[0];
-		if (!file) return;
-
-		if (file.size > 20 * 1024 * 1024) {
-			toast.error('File exceeds 20MB limit.');
-			target.value = '';
-			return;
+		if (target.files && target.files.length > 0) {
+			const currentFolderId = $page.url.searchParams.get('folder');
+			uploadState.addFiles(target.files, currentFolderId);
 		}
-
-		const formData = new FormData();
-		formData.append('file', file);
-		
-		const currentFolderId = $page.url.searchParams.get('folder');
-		if (currentFolderId) {
-			formData.append('folderId', currentFolderId);
-		}
-
-		if (file.type.startsWith('video/')) {
-			toastId = toast.loading('Extracting thumbnail...', { description: 'Processing video frame' });
-			try {
-				const videoInfo = await new Promise<{ dataUrl: string | null; duration: number }>((resolve) => {
-					const video = document.createElement('video');
-					video.preload = 'metadata';
-					video.muted = true;
-					video.src = URL.createObjectURL(file);
-					
-					video.onloadedmetadata = () => {
-						// Wait for duration to be valid
-						if (video.duration === Infinity) {
-							video.currentTime = 1e101;
-							video.ontimeupdate = () => {
-								video.ontimeupdate = null;
-								video.currentTime = 0;
-								// Now duration is known
-							};
-						}
-					};
-
-					video.onloadeddata = () => {
-						// Ensure it's a valid number before seeking
-						const safeDuration = isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
-						video.currentTime = Math.min(1, safeDuration / 2 || 0);
-					};
-
-					video.onseeked = () => {
-						const canvas = document.createElement('canvas');
-						const ctx = canvas.getContext('2d');
-						const safeDuration = isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
-						if (!ctx) return resolve({ dataUrl: null, duration: safeDuration });
-
-						const maxWidth = 320;
-						const scale = Math.min(1, maxWidth / video.videoWidth);
-						canvas.width = video.videoWidth * scale;
-						canvas.height = video.videoHeight * scale;
-
-						ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-						const dataUrl = canvas.toDataURL('image/webp', 0.8);
-						URL.revokeObjectURL(video.src);
-						resolve({ dataUrl, duration: safeDuration });
-					};
-
-					video.onerror = () => {
-						URL.revokeObjectURL(video.src);
-						resolve({ dataUrl: null, duration: 0 });
-					};
-				});
-
-				if (videoInfo.dataUrl) {
-					formData.append('videoThumbnail', videoInfo.dataUrl);
-				}
-				if (videoInfo.duration > 0) {
-					formData.append('videoDuration', videoInfo.duration.toString());
-				}
-			} catch (e) {
-				console.error('Thumbnail extraction failed', e);
-			}
-		} else if (file.type.startsWith('image/')) {
-			toastId = toast.loading('Creating thumbnail...', { description: 'Compressing image' });
-			try {
-				const imageThumbnail = await new Promise<string | null>((resolve) => {
-					const img = new window.Image();
-					img.onload = () => {
-						const canvas = document.createElement('canvas');
-						const ctx = canvas.getContext('2d');
-						if (!ctx) return resolve(null);
-
-						const maxWidth = 320;
-						const scale = Math.min(1, maxWidth / img.width);
-						canvas.width = img.width * scale;
-						canvas.height = img.height * scale;
-
-						ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-						const dataUrl = canvas.toDataURL('image/webp', 0.8);
-						URL.revokeObjectURL(img.src);
-						resolve(dataUrl);
-					};
-					img.onerror = () => {
-						// Fallback for unsupported formats like HEIC
-						URL.revokeObjectURL(img.src);
-						resolve(null);
-					};
-					img.src = URL.createObjectURL(file);
-				});
-
-				if (imageThumbnail) {
-					formData.append('imageThumbnail', imageThumbnail);
-				}
-			} catch (e) {
-				console.error('Image thumbnail extraction failed', e);
-			}
-		}
-
-		isUploading = true;
-		uploadProgress = 0;
-		if (!toastId) {
-			toastId = toast.loading('Starting upload...', { description: '0%' });
-		} else {
-			toast.loading('Starting upload...', { id: toastId, description: '0%' });
-		}
-
-		const xhr = new XMLHttpRequest();
-		let lastProgress = -1;
-        
-		xhr.upload.addEventListener('progress', (event) => {
-			if (event.lengthComputable) {
-				const currentProgress = Math.round((event.loaded / event.total) * 100);
-				if (currentProgress !== lastProgress) {
-					lastProgress = currentProgress;
-					
-					if (currentProgress < 100) {
-						toast.loading('Uploading to server...', {
-							id: toastId,
-							description: `${currentProgress}% - Sending file...`
-						});
-					} else {
-						toast.loading('Processing...', {
-							id: toastId,
-							description: `100% - Saving to secure vault (Telegram). This might take a moment...`
-						});
-					}
-				}
-			}
-		});
-
-		xhr.addEventListener('load', async () => {
-			if (xhr.status >= 200 && xhr.status < 300) {
-				toast.success('Upload complete!', { id: toastId, description: 'File saved successfully.' });
-				await invalidateAll();
-			} else {
-				try {
-					const responseData = JSON.parse(xhr.responseText);
-					toast.error(responseData.error || 'Upload failed', { id: toastId, description: '' });
-				} catch {
-					toast.error('Upload failed', { id: toastId, description: '' });
-				}
-			}
-			isUploading = false;
-			target.value = '';
-		});
-
-		xhr.addEventListener('error', () => {
-			toast.error('Connection timeout or network error.', { id: toastId, description: '' });
-			isUploading = false;
-			target.value = '';
-		});
-
-		xhr.open('POST', '/api/files/upload');
-		xhr.send(formData);
+		target.value = '';
 	}
 </script>
 
@@ -379,14 +215,13 @@
 			</div>
 
 			<div class="ml-auto flex items-center gap-4 pl-4">
-				<input type="file" id="global-file-upload" class="hidden" bind:this={fileInput} onchange={handleUpload} />
+				<input type="file" multiple id="global-file-upload" class="hidden" bind:this={fileInput} onchange={handleUpload} />
 				<button
 					onclick={() => fileInput.click()}
-					disabled={isUploading}
-					class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FF8266] disabled:opacity-50 disabled:cursor-not-allowed"
+					class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FF8266]"
 				>
 					<UploadCloud size={18} />
-					{isUploading ? 'Uploading...' : 'Upload File'}
+					Upload File
 				</button>
 			</div>
 		</header>
@@ -397,6 +232,8 @@
 		</div>
 	</main>
 </div>
+
+<UploadPanel />
 
 <!-- Global Audio Element (Muted/Unmounted if on dedicated video route to prevent overlap) -->
 {#if !($page.url.pathname.startsWith('/video/') && $page.url.pathname.length > 7)}
