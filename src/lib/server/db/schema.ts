@@ -50,6 +50,10 @@ export const files = sqliteTable("files", {
   album: text("album"),
   duration: integer("duration"), // Seconds (Audio / Video)
   thumbnailUrl: text("thumbnail_url"),
+  plainLyrics: text("plain_lyrics"),
+  syncedLyrics: text("synced_lyrics"),
+  romajiLyrics: text("romaji_lyrics"),
+  lyricsSource: text("lyrics_source"), // 'embedded' | 'lrclib' | 'manual' | 'not_found'
 
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),

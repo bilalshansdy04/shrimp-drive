@@ -15,12 +15,16 @@
 		SkipForward,
 		Repeat,
 		ListMusic,
-		Volume2
+		Volume2,
+		Mic2
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import { media } from '$lib/client/mediaState.svelte';
+	import LyricsPanel from '$lib/components/music/LyricsPanel.svelte';
 
 	let { data } = $props<{ data: PageData }>();
+
+	let showLyrics = $state(false);
 
 	let audioFiles = $derived(data.audioFiles);
 	let totalSize = $derived(audioFiles.reduce((acc: number, f: any) => acc + f.fileSize, 0));
@@ -90,6 +94,11 @@
 		</div>
 	</div>
 
+	{#if showLyrics}
+		<div class="mb-6 h-[calc(100vh-16rem)] min-h-[400px] rounded-2xl overflow-hidden border border-[#2A3241]">
+			<LyricsPanel />
+		</div>
+	{:else}
 	<div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
 		<div
 			class="bg-primary-container col-span-1 flex flex-col items-center gap-6 rounded-2xl p-6 text-black md:flex-row lg:col-span-2"
@@ -273,6 +282,7 @@
 			</table>
 		</div>
 	</div>
+	{/if}
 </div>
 
 {#if media.currentTrack}
@@ -349,6 +359,9 @@
 
 		<!-- Right: Volume & Extras -->
 		<div class="flex w-1/3 justify-end gap-4 pr-2">
+			<button class="text-gray-400 hover:text-white transition-colors" class:text-[#FF6B4A]={showLyrics} onclick={() => showLyrics = !showLyrics} title="Toggle Lyrics">
+				<Mic2 size={18} />
+			</button>
 			<button class="text-gray-400 hover:text-white"><ListMusic size={18} /></button>
 			<div class="group flex items-center gap-2">
 				<button
