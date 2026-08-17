@@ -22,6 +22,6 @@ export default defineConfig({
 	],
 	ssr: {
 		noExternal: ['svelte-sonner'],
-		external: ['@libsql/client']
+		external: ['@libsql/client', 'drizzle-orm', 'drizzle-orm/libsql']
 	}
 });
