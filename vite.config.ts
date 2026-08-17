@@ -21,6 +21,7 @@ export default defineConfig({
 		})
 	],
 	ssr: {
-		noExternal: ['svelte-sonner']
+		noExternal: ['svelte-sonner'],
+		external: ['@libsql/client']
 	}
 });
