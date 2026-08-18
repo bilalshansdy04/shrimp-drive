@@ -1,4 +1,5 @@
 <script lang="ts">
+	import defaultMusicCover from '$lib/assets/default-music.webp';
 	import {
 		Filter,
 		List,
@@ -152,7 +153,7 @@
 					<div class="flex items-center gap-4 rounded-lg border border-[#2A3241] bg-[#0B0E14] p-3">
 						<div class="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-[#2A3241]">
 							{#if nextTrack.thumbnailUrl}
-								<img src={nextTrack.thumbnailUrl} alt="Cover" class="h-full w-full object-cover" />
+								<img src={nextTrack.thumbnailUrl || defaultMusicCover} onerror={(e) => e.currentTarget.src = defaultMusicCover} alt="Cover" class="h-full w-full object-cover" />
 							{:else}
 								<div class="flex h-full w-full items-center justify-center text-gray-500">
 									<Music size={20} />
@@ -241,15 +242,12 @@
 									<div
 										class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-[#2A3241] bg-[#10131a]"
 									>
-										{#if track.thumbnailUrl}
-											<img
+										<img
 												class="h-full w-full object-cover"
 												alt="Album Cover"
-												src={track.thumbnailUrl}
+												src={track.thumbnailUrl || defaultMusicCover}
+												onerror={(e) => e.currentTarget.src = defaultMusicCover}
 											/>
-										{:else}
-											<Music size={16} class="text-gray-400" />
-										{/if}
 									</div>
 									<span class="font-medium text-gray-300 transition-colors group-hover:text-white"
 										>{track.title || track.fileName}</span
@@ -291,17 +289,12 @@
 	>
 		<div class="flex w-1/3 min-w-0 items-center gap-4">
 			<div class="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[#2A3241] shadow-md">
-				{#if media.currentTrack.thumbnailUrl}
-					<img
-						src={media.currentTrack.thumbnailUrl}
+				<img
+						src={media.currentTrack.thumbnailUrl || defaultMusicCover}
+						onerror={(e) => e.currentTarget.src = defaultMusicCover}
 						alt="Cover"
 						class="h-full w-full object-cover"
 					/>
-				{:else}
-					<div class="flex h-full w-full items-center justify-center text-gray-500">
-						<Music size={24} />
-					</div>
-				{/if}
 			</div>
 			<div class="flex min-w-0 flex-col">
 				<span class="truncate font-medium text-white"
