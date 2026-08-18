@@ -26,6 +26,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const pathname = event.url.pathname;
 	
+	// Handle CORS for admin API
+	if (pathname.startsWith('/api/admin/')) {
+		if (event.request.method === 'OPTIONS') {
+			return new Response(null, {
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+				}
+			});
+		}
+	}
+	
 	const publicRoutes = [
 		'/login',
 		'/register',
@@ -46,6 +59,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	if (event.locals.user) {
+		if (event.locals.user.isSuspended) {
+			if (pathname.startsWith('/api/')) {
+				return new Response(JSON.stringify({ error: 'Account Suspended' }), {
+					status: 403,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			} else {
+				// Destroy session cookies if suspended user tries to navigate to normal pages
+				event.cookies.delete('session_id', { path: '/' });
+				throw redirect(303, '/login?error=suspended');
+			}
+		}
+
 		if (isAuthRoute) {
 			throw redirect(303, '/dashboard');
 		}
@@ -57,5 +83,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+
+	// Attach CORS headers for admin API
+	if (pathname.startsWith('/api/admin/')) {
+		response.headers.set('Access-Control-Allow-Origin', '*');
+		response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+		response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+	}
+
+	return response;
 };

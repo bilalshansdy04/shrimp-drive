@@ -14,6 +14,7 @@ export const users = sqliteTable("users", {
   encryptionMode: text("encryption_mode"), // 'locked_on' | 'locked_off' | 'flexible'
   storageUsed: integer("storage_used").default(0).notNull(), // in Bytes
   storageLimit: integer("storage_limit").default(8589934592).notNull(), // Default 8 GB in Bytes
+  isSuspended: integer("is_suspended", { mode: "boolean" }).default(false).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
@@ -109,6 +110,9 @@ export const invitationCodes = sqliteTable("invitation_codes", {
   type: text("type").notNull(), // 'friend_zero_setup' | 'regular_self_setup'
   isUsed: integer("is_used").default(0).notNull(), // 0 or 1
   usedBy: text("used_by").references(() => users.id, { onDelete: "set null" }),
+  maxUses: integer("max_uses").default(1).notNull(),
+  usedCount: integer("used_count").default(0).notNull(),
+  isRevoked: integer("is_revoked", { mode: "boolean" }).default(false).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
     () => new Date(),
   ),
