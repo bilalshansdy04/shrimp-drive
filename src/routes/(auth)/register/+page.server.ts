@@ -1,4 +1,4 @@
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { users, emailVerificationTokens } from '$lib/server/db/schema';
@@ -50,7 +50,8 @@ export const actions: Actions = {
 				emailVerified: 0
 			});
 
-			const token = crypto.randomBytes(32).toString('hex');
+			// Generate 6-digit OTP
+			const token = Math.floor(100000 + Math.random() * 900000).toString();
 			// Token valid for 24 hours
 			const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24);
 
@@ -64,8 +65,13 @@ export const actions: Actions = {
 			// Attempt to send email but don't block registration if it fails (can add resend button later)
 			await sendVerificationEmail(email, token);
 
-			return { success: 'Registration successful! Please check your email to verify your account.' };
+			// Redirect to OTP verification page
+			throw redirect(303, `/verify-email?email=${encodeURIComponent(email)}`);
 		} catch (error) {
+			// Ignore redirect errors as they are expected behavior in SvelteKit
+			if (error && typeof error === 'object' && 'status' in error && (error as any).status >= 300 && (error as any).status < 400) {
+				throw error;
+			}
 			console.error('Error during registration:', error);
 			return fail(500, { error: 'Failed to create account.' });
 		}

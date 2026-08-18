@@ -49,12 +49,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 		'/login/google/callback'
 	];
 	const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
-	const isVerifyEmailRoute = pathname.startsWith('/verify-email/');
+	const isVerifyEmailRoute = pathname.startsWith('/verify-email');
 	const isResetPasswordRoute = pathname.startsWith('/reset-password/');
 
 	const isAuthRoute = pathname === '/login' || pathname === '/register';
 
-	if (!event.locals.user && !isPublicRoute && !isVerifyEmailRoute && !isResetPasswordRoute) {
+	if (!event.locals.user && !isPublicRoute && !isVerifyEmailRoute && !isResetPasswordRoute && !pathname.startsWith('/api/admin/')) {
 		throw redirect(303, '/login');
 	}
 
@@ -67,8 +67,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 				});
 			} else {
 				// Destroy session cookies if suspended user tries to navigate to normal pages
+				if (event.locals.session) {
+					const { invalidateSession } = await import('$lib/server/auth');
+					await invalidateSession(event.locals.session.id);
+				}
 				event.cookies.delete('session_id', { path: '/' });
-				throw redirect(303, '/login?error=suspended');
+				event.locals.user = null;
+				event.locals.session = null;
+				// Instead of throw redirect (which might cause loop if cookie persists), 
+				// redirect to login with query param. If we are already on login, do nothing to break loop.
+				if (pathname !== '/login') {
+					throw redirect(303, '/login?error=suspended');
+				}
 			}
 		}
 

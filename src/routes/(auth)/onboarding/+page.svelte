@@ -22,7 +22,15 @@
 
   async function verifyInviteCode() {
     errorMsg = "";
-    if (!inviteCode || inviteCode.length < 5) {
+    
+    // Allow empty code (Skip)
+    if (!inviteCode) {
+      inviteType = 'regular_self_setup';
+      currentStep = 2; // Go to bot setup
+      return;
+    }
+
+    if (inviteCode.length < 5) {
       errorMsg = "Invalid invite code length.";
       return;
     }

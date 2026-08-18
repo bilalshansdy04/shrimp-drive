@@ -13,35 +13,40 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const data = await request.json();
 		const { code, botToken, chatId } = data;
 
-		if (!code) {
-			return json({ error: 'Invitation Code is required.' }, { status: 400 });
-		}
-
-		// Verify Invitation Code
-		const codeResult = await db.select().from(invitationCodes).where(eq(invitationCodes.code, code));
-		if (codeResult.length === 0) {
-			return json({ error: 'Invalid Invitation Code.' }, { status: 400 });
-		}
-
-		const inviteCode = codeResult[0];
-		if (inviteCode.isUsed) {
-			return json({ error: 'Invitation Code has already been used.' }, { status: 400 });
-		}
-
 		let finalBotToken = botToken;
 		let finalChatId = chatId;
-		const encryptionMode = inviteCode.encryptionMode;
-		const storageLimit = inviteCode.storageLimit;
+		let finalEncryptionMode = 'flexible';
+		let finalStorageLimit = 8589934592; // 8GB default
+		let inviteType = 'regular_self_setup';
 
-		if (inviteCode.type === 'friend_zero_setup') {
-			if (!inviteCode.assignedBotToken || !inviteCode.assignedChatId) {
-				return json({ error: 'Invitation Code is invalid. Missing admin bot token.' }, { status: 400 });
+		if (code) {
+			// Verify Invitation Code
+			const codeResult = await db.select().from(invitationCodes).where(eq(invitationCodes.code, code));
+			if (codeResult.length === 0) {
+				return json({ error: 'Invalid Invitation Code.' }, { status: 400 });
 			}
-			finalBotToken = inviteCode.assignedBotToken;
-			finalChatId = inviteCode.assignedChatId;
-		} else {
+
+			const inviteCode = codeResult[0];
+			if (inviteCode.isUsed) {
+				return json({ error: 'Invitation Code has already been used.' }, { status: 400 });
+			}
+
+			finalEncryptionMode = inviteCode.encryptionMode;
+			finalStorageLimit = inviteCode.storageLimit;
+			inviteType = inviteCode.type;
+
+			if (inviteCode.type === 'friend_zero_setup') {
+				if (!inviteCode.assignedBotToken || !inviteCode.assignedChatId) {
+					return json({ error: 'Invitation Code is invalid. Missing admin bot token.' }, { status: 400 });
+				}
+				finalBotToken = inviteCode.assignedBotToken;
+				finalChatId = inviteCode.assignedChatId;
+			}
+		}
+
+		if (!code || inviteType !== 'friend_zero_setup') {
 			if (!finalBotToken || !finalChatId) {
-				return json({ error: 'Bot Token and Chat ID are required for regular setup.' }, { status: 400 });
+				return json({ error: 'Bot Token and Chat ID are required.' }, { status: 400 });
 			}
 			// Verify custom Bot Token
 			const getMeRes = await fetch(`https://api.telegram.org/bot${finalBotToken}/getMe`);
@@ -62,15 +67,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await db.update(users).set({
 			telegramBotToken: finalBotToken,
 			telegramChatId: finalChatId,
-			encryptionMode,
-			storageLimit
+			encryptionMode: finalEncryptionMode,
+			storageLimit: finalStorageLimit
 		}).where(eq(users.id, locals.user.id));
 
-		// Mark code as used
-		await db.update(invitationCodes).set({
-			isUsed: 1,
-			usedBy: locals.user.id
-		}).where(eq(invitationCodes.id, inviteCode.id));
+		if (code) {
+			// Mark code as used
+			await db.update(invitationCodes).set({
+				isUsed: 1,
+				usedBy: locals.user.id
+			}).where(eq(invitationCodes.code, code));
+		}
 
 		return json({ success: true });
 	} catch (error) {

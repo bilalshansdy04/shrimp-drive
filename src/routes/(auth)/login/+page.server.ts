@@ -9,7 +9,7 @@ import { createSession, generateSessionToken } from '$lib/server/auth';
 export const load: PageServerLoad = async () => {
 	const userCountResult = await db.select({ count: count() }).from(users);
 	if (userCountResult[0].count === 0) {
-		throw redirect(303, '/onboarding');
+		throw redirect(303, '/register');
 	}
 	return {};
 };
