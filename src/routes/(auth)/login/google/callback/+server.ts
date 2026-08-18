@@ -24,7 +24,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 		const tokens = await googleAuth.validateAuthorizationCode(code, storedCodeVerifier);
 		const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
 			headers: {
-				Authorization: `Bearer ${tokens.accessToken}`
+				Authorization: `Bearer ${tokens.accessToken()}`
 			}
 		});
 		const googleUser: {
