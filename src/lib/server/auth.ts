@@ -2,7 +2,16 @@ import { db } from './db';
 import { sessions, users } from './db/schema';
 import { eq } from 'drizzle-orm';
 import crypto from 'node:crypto';
+import { Google } from 'arctic';
+import { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, BASE_URL } from '$env/static/private';
+
 // SvelteKit runs in environments where crypto.randomUUID is available.
+
+export const googleAuth = new Google(
+	GOOGLE_CLIENT_ID,
+	GOOGLE_CLIENT_SECRET,
+	`${BASE_URL}/login/google/callback`
+);
 
 const SESSION_EXPIRY = 1000 * 60 * 60 * 24 * 30; // 30 days
 

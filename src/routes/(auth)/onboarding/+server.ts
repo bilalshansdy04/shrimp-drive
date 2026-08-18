@@ -1,66 +1,80 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
-import { createSession, generateSessionToken } from '$lib/server/auth';
-import bcrypt from 'bcryptjs';
+import { users, invitationCodes } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
+		if (!locals.user) {
+			return json({ error: 'Unauthorized.' }, { status: 401 });
+		}
+
 		const data = await request.json();
-		const { displayName, username, password, botToken, chatId } = data;
+		const { code, botToken, chatId } = data;
 
-		if (!displayName || !username || !password || !botToken || !chatId) {
-			return json({ error: 'All fields are required.' }, { status: 400 });
+		if (!code) {
+			return json({ error: 'Invitation Code is required.' }, { status: 400 });
 		}
 
-		// 1. Verify Telegram Bot Token
-		const getMeRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
-		const getMeData = await getMeRes.json();
-		if (!getMeData.ok) {
-			return json({ error: 'Invalid Telegram Bot Token.' }, { status: 400 });
+		// Verify Invitation Code
+		const codeResult = await db.select().from(invitationCodes).where(eq(invitationCodes.code, code));
+		if (codeResult.length === 0) {
+			return json({ error: 'Invalid Invitation Code.' }, { status: 400 });
 		}
 
-		// 2. Verify Telegram Chat ID and bot access
-		const getChatRes = await fetch(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${chatId}`);
-		const getChatData = await getChatRes.json();
-		if (!getChatData.ok) {
-			return json({ error: `Invalid Chat ID or Bot not added to channel. Telegram says: ${getChatData.description}` }, { status: 400 });
+		const inviteCode = codeResult[0];
+		if (inviteCode.isUsed) {
+			return json({ error: 'Invitation Code has already been used.' }, { status: 400 });
 		}
 
-		// 3. Hash Password
-		const passwordHash = await bcrypt.hash(password, 10);
+		let finalBotToken = botToken;
+		let finalChatId = chatId;
+		const encryptionMode = inviteCode.encryptionMode;
+		const storageLimit = inviteCode.storageLimit;
 
-		// 4. Create User
-		const userId = crypto.randomUUID();
-		try {
-			await db.insert(users).values({
-				id: userId,
-				username,
-				displayName,
-				passwordHash,
-				telegramBotToken: botToken,
-				telegramChatId: chatId
-			});
-		} catch (err: any) {
-			// e.g. unique constraint failed for username
-			return json({ error: 'Username already exists or database error.' }, { status: 400 });
+		if (inviteCode.type === 'friend_zero_setup') {
+			if (!inviteCode.assignedBotToken || !inviteCode.assignedChatId) {
+				return json({ error: 'Invitation Code is invalid. Missing admin bot token.' }, { status: 400 });
+			}
+			finalBotToken = inviteCode.assignedBotToken;
+			finalChatId = inviteCode.assignedChatId;
+		} else {
+			if (!finalBotToken || !finalChatId) {
+				return json({ error: 'Bot Token and Chat ID are required for regular setup.' }, { status: 400 });
+			}
+			// Verify custom Bot Token
+			const getMeRes = await fetch(`https://api.telegram.org/bot${finalBotToken}/getMe`);
+			const getMeData = await getMeRes.json();
+			if (!getMeData.ok) {
+				return json({ error: 'Invalid Telegram Bot Token.' }, { status: 400 });
+			}
+
+			// Verify custom Chat ID
+			const getChatRes = await fetch(`https://api.telegram.org/bot${finalBotToken}/getChat?chat_id=${finalChatId}`);
+			const getChatData = await getChatRes.json();
+			if (!getChatData.ok) {
+				return json({ error: `Invalid Chat ID or Bot not added to channel. Telegram says: ${getChatData.description}` }, { status: 400 });
+			}
 		}
 
-		// 5. Create Session
-		const token = generateSessionToken();
-		const session = await createSession(token, userId);
+		// Update User
+		await db.update(users).set({
+			telegramBotToken: finalBotToken,
+			telegramChatId: finalChatId,
+			encryptionMode,
+			storageLimit
+		}).where(eq(users.id, locals.user.id));
 
-		cookies.set('session_id', token, {
-			path: '/',
-			httpOnly: true,
-			sameSite: 'lax',
-			expires: session.expiresAt
-		});
+		// Mark code as used
+		await db.update(invitationCodes).set({
+			isUsed: 1,
+			usedBy: locals.user.id
+		}).where(eq(invitationCodes.id, inviteCode.id));
 
 		return json({ success: true });
 	} catch (error) {
-		console.error(error);
+		console.error('Error during onboarding:', error);
 		return json({ error: 'Internal server error.' }, { status: 500 });
 	}
 };

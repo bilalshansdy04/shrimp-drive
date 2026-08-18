@@ -25,14 +25,36 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const pathname = event.url.pathname;
-	const isAuthRoute = pathname === '/login' || pathname === '/onboarding';
+	
+	const publicRoutes = [
+		'/login',
+		'/register',
+		'/forgot-password',
+		'/about',
+		'/privacy',
+		'/login/google',
+		'/login/google/callback'
+	];
+	const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
+	const isVerifyEmailRoute = pathname.startsWith('/verify-email/');
+	const isResetPasswordRoute = pathname.startsWith('/reset-password/');
 
-	if (!event.locals.user && !isAuthRoute) {
+	const isAuthRoute = pathname === '/login' || pathname === '/register';
+
+	if (!event.locals.user && !isPublicRoute && !isVerifyEmailRoute && !isResetPasswordRoute) {
 		throw redirect(303, '/login');
 	}
 
-	if (event.locals.user && isAuthRoute) {
-		throw redirect(303, '/dashboard');
+	if (event.locals.user) {
+		if (isAuthRoute) {
+			throw redirect(303, '/dashboard');
+		}
+
+		// If user is logged in but hasn't onboarded (telegram setup), force onboarding
+		// Exclude onboarding route itself to prevent redirect loop
+		if (!event.locals.user.telegramBotToken && pathname !== '/onboarding' && !pathname.startsWith('/api/')) {
+			throw redirect(303, '/onboarding');
+		}
 	}
 
 	return resolve(event);

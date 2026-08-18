@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
-import { eq, count } from 'drizzle-orm';
+import { eq, count, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { createSession, generateSessionToken } from '$lib/server/auth';
 
@@ -24,16 +24,27 @@ export const actions: Actions = {
 			return fail(400, { error: 'Username and password are required.' });
 		}
 
-		const result = await db.select().from(users).where(eq(users.username, username));
+		const result = await db.select().from(users).where(
+			or(eq(users.username, username), eq(users.email, username))
+		);
 		if (result.length === 0) {
-			return fail(401, { error: 'Invalid username or password.' });
+			return fail(401, { error: 'Invalid credentials.' });
 		}
 
 		const user = result[0];
+		
+		if (!user.passwordHash) {
+			return fail(401, { error: 'Please login with Google.' });
+		}
+
+		if (user.emailVerified === 0) {
+			return fail(403, { error: 'Please verify your email before logging in.' });
+		}
+
 		const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
 		if (!isPasswordValid) {
-			return fail(401, { error: 'Invalid username or password.' });
+			return fail(401, { error: 'Invalid credentials.' });
 		}
 
 		const token = generateSessionToken();

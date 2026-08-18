@@ -5,9 +5,13 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(), // cuid or uuid
   username: text("username").notNull().unique(),
   displayName: text("display_name").notNull(),
-  passwordHash: text("password_hash").notNull(),
-  telegramBotToken: text("telegram_bot_token").notNull(),
-  telegramChatId: text("telegram_chat_id").notNull(),
+  email: text("email").unique(),
+  emailVerified: integer("email_verified").default(0).notNull(),
+  googleId: text("google_id").unique(),
+  passwordHash: text("password_hash"),
+  telegramBotToken: text("telegram_bot_token"),
+  telegramChatId: text("telegram_chat_id"),
+  encryptionMode: text("encryption_mode"), // 'locked_on' | 'locked_off' | 'flexible'
   storageUsed: integer("storage_used").default(0).notNull(), // in Bytes
   storageLimit: integer("storage_limit").default(8589934592).notNull(), // Default 8 GB in Bytes
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
@@ -91,5 +95,41 @@ export const sessions = sqliteTable("sessions", {
   userId: text("user_id")
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+});
+
+// 6. Invitation Codes Table
+export const invitationCodes = sqliteTable("invitation_codes", {
+  id: text("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  assignedBotToken: text("assigned_bot_token"),
+  assignedChatId: text("assigned_chat_id"),
+  encryptionMode: text("encryption_mode").notNull(), // 'locked_on' | 'locked_off' | 'flexible'
+  storageLimit: integer("storage_limit").notNull(),
+  type: text("type").notNull(), // 'friend_zero_setup' | 'regular_self_setup'
+  isUsed: integer("is_used").default(0).notNull(), // 0 or 1
+  usedBy: text("used_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(
+    () => new Date(),
+  ),
+});
+
+// 7. Email Verification Tokens
+export const emailVerificationTokens = sqliteTable("email_verification_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+});
+
+// 8. Password Reset Tokens
+export const passwordResetTokens = sqliteTable("password_reset_tokens", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  token: text("token").notNull().unique(),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
 });
