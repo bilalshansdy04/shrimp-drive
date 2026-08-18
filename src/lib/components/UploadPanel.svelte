@@ -55,6 +55,12 @@
 										Processing...
 									{:else if item.status === 'uploading'}
 										Uploading {item.progress}%
+									{:else if item.status === 'queued_for_sending'}
+										In queue for processing
+									{:else if item.status === 'cooldown' || item.status === 'wait_send'}
+										Cooling down 0.5s...
+									{:else if item.status === 'sending'}
+										Sending to Telegram...
 									{:else if item.status === 'completed'}
 										Completed
 									{:else if item.status === 'error'}
@@ -68,6 +74,10 @@
 						<div class="ml-3 flex shrink-0 items-center justify-center">
 							{#if item.status === 'idle'}
 								<div class="h-4 w-4 rounded-full border-2 border-gray-600"></div>
+							{:else if item.status === 'queued_for_sending' || item.status === 'cooldown' || item.status === 'wait_send'}
+								<div class="h-4 w-4 rounded-full border-2 border-gray-500 border-dashed"></div>
+							{:else if item.status === 'sending'}
+								<Loader2 size={18} class="animate-spin text-blue-400" />
 							{:else if item.status === 'extracting_thumb' || item.status === 'uploading'}
 								<div class="relative flex h-5 w-5 items-center justify-center">
 									<!-- Progress Ring -->

@@ -1,7 +1,7 @@
 import { invalidateAll } from '$app/navigation';
 import { toast } from 'svelte-sonner';
 
-export type UploadStatus = 'idle' | 'extracting_thumb' | 'uploading' | 'completed' | 'error';
+export type UploadStatus = 'idle' | 'extracting_thumb' | 'uploading' | 'cooldown' | 'queued_for_sending' | 'wait_send' | 'sending' | 'completed' | 'error';
 
 export interface UploadItem {
 	id: string;
@@ -10,12 +10,21 @@ export interface UploadItem {
 	progress: number;
 	errorMsg?: string;
 	folderId?: string | null;
+	_resolveUpload?: () => void;
+	_resolveSend?: (success: boolean, err?: string) => void;
+	_sendFinished?: boolean;
+	_sendSuccess?: boolean;
+	_sendErr?: string;
 }
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class UploadState {
 	items = $state<UploadItem[]>([]);
 	isOpen = $state(false);
-	isProcessing = $state(false);
+	
+	isUploadingActive = $state(false);
+	isSendingActive = $state(false);
 
 	get totalItems() {
 		return this.items.length;
@@ -26,11 +35,10 @@ class UploadState {
 	}
 
 	get pendingItems() {
-		return this.items.filter((i) => i.status === 'idle' || i.status === 'extracting_thumb' || i.status === 'uploading');
+		return this.items.filter((i) => i.status !== 'completed' && i.status !== 'error');
 	}
 
 	addFiles(files: FileList | File[], folderId?: string | null) {
-		// Clear the queue if there are no pending uploads (all are completed/error)
 		if (this.pendingItems.length === 0) {
 			this.items = [];
 		}
@@ -47,13 +55,15 @@ class UploadState {
 				file,
 				status: 'idle',
 				progress: 0,
-				folderId
+				folderId,
+				_sendFinished: false
 			});
 		}
 
 		if (this.items.length > 0) {
 			this.isOpen = true;
-			this.processQueue();
+			this.processUploadQueue();
+			this.processSendingQueue();
 		}
 	}
 
@@ -71,21 +81,89 @@ class UploadState {
 		}
 	}
 
-	private async processQueue() {
-		if (this.isProcessing) return;
-		this.isProcessing = true;
+	private async processUploadQueue() {
+		if (this.isUploadingActive) return;
+		this.isUploadingActive = true;
 
 		while (true) {
 			const nextItem = this.items.find((i) => i.status === 'idle');
 			if (!nextItem) break;
 
-			await this.uploadItem(nextItem);
+			await this.uploadItemToVPS(nextItem);
+			
+			if (nextItem.status === 'queued_for_sending' || nextItem.status === 'sending' || nextItem._sendFinished) {
+				const prev = nextItem.status;
+				if (prev !== 'completed' && prev !== 'error') {
+					nextItem.status = 'cooldown';
+					await wait(500);
+					if (nextItem.status === 'cooldown') {
+						nextItem.status = prev;
+					}
+				} else {
+					await wait(500);
+				}
+			} else {
+			    await wait(500);
+			}
 		}
 
-		this.isProcessing = false;
+		this.isUploadingActive = false;
 	}
 
-	private async uploadItem(item: UploadItem) {
+	private async processSendingQueue() {
+		if (this.isSendingActive) return;
+		this.isSendingActive = true;
+
+		while (true) {
+			let nextItem = this.items.find((i) => 
+				i.status === 'queued_for_sending' || 
+				(i.status === 'cooldown' && i._sendFinished === false)
+			);
+			
+			if (!nextItem) {
+				const stillUploading = this.items.some(i => i.status === 'idle' || i.status === 'extracting_thumb' || i.status === 'uploading' || i.status === 'cooldown');
+				if (stillUploading) {
+					await wait(200);
+					continue;
+				} else {
+					break;
+				}
+			}
+
+			nextItem.status = 'wait_send';
+			await wait(500);
+
+			if (nextItem._sendFinished) {
+				nextItem.status = nextItem._sendSuccess ? 'completed' : 'error';
+				if (!nextItem._sendSuccess) nextItem.errorMsg = nextItem._sendErr;
+				if (nextItem._sendSuccess) await invalidateAll();
+			} else {
+				nextItem.status = 'sending';
+				
+				await new Promise<void>((resolve) => {
+					nextItem!._resolveSend = (success, err) => {
+						nextItem!._sendFinished = true;
+						nextItem!._sendSuccess = success;
+						nextItem!._sendErr = err;
+						
+						nextItem!.status = success ? 'completed' : 'error';
+						if (!success) nextItem!.errorMsg = err;
+						resolve();
+					};
+				});
+
+				if (nextItem._sendSuccess) {
+					await invalidateAll();
+				}
+			}
+			
+			await wait(500);
+		}
+
+		this.isSendingActive = false;
+	}
+
+	private async uploadItemToVPS(item: UploadItem) {
 		item.status = 'extracting_thumb';
 		
 		const formData = new FormData();
@@ -95,7 +173,6 @@ class UploadState {
 			formData.append('folderId', item.folderId);
 		}
 
-		// Extract thumbnail if needed
 		if (item.file.type.startsWith('video/')) {
 			try {
 				const videoInfo = await new Promise<{ dataUrl: string | null; duration: number }>((resolve) => {
@@ -181,36 +258,65 @@ class UploadState {
 
 		item.status = 'uploading';
 
-		return new Promise<void>((resolve) => {
+		return new Promise<void>((resolveUpload) => {
 			const xhr = new XMLHttpRequest();
+			let hasResolvedUpload = false;
+
+			const triggerUploadDone = () => {
+				if (!hasResolvedUpload) {
+					hasResolvedUpload = true;
+					if (item.status === 'uploading') {
+						item.status = 'queued_for_sending';
+					}
+					resolveUpload();
+				}
+			};
 			
 			xhr.upload.addEventListener('progress', (event) => {
 				if (event.lengthComputable) {
 					item.progress = Math.round((event.loaded / event.total) * 100);
+					if (item.progress === 100) {
+						triggerUploadDone();
+					}
 				}
 			});
 
-			xhr.addEventListener('load', async () => {
+			xhr.addEventListener('load', () => {
+				triggerUploadDone();
+
+				let success = false;
+				let errMsg = 'Upload failed';
+
 				if (xhr.status >= 200 && xhr.status < 300) {
-					item.status = 'completed';
+					success = true;
 					item.progress = 100;
-					await invalidateAll();
 				} else {
-					item.status = 'error';
 					try {
 						const responseData = JSON.parse(xhr.responseText);
-						item.errorMsg = responseData.error || 'Upload failed';
+						errMsg = responseData.error || 'Upload failed';
 					} catch {
-						item.errorMsg = 'Upload failed';
+						errMsg = 'Upload failed';
 					}
 				}
-				resolve();
+
+				if (item._resolveSend) {
+					item._resolveSend(success, errMsg);
+				} else {
+					item._sendFinished = true;
+					item._sendSuccess = success;
+					item._sendErr = errMsg;
+				}
 			});
 
 			xhr.addEventListener('error', () => {
-				item.status = 'error';
-				item.errorMsg = 'Connection error';
-				resolve();
+				triggerUploadDone();
+				if (item._resolveSend) {
+					item._resolveSend(false, 'Connection error');
+				} else {
+					item._sendFinished = true;
+					item._sendSuccess = false;
+					item._sendErr = 'Connection error';
+				}
 			});
 
 			xhr.open('POST', '/api/files/upload');
