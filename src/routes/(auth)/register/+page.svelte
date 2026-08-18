@@ -1,10 +1,34 @@
 <script lang="ts">
-	import { AtSign, Key, UserPlus, Mail } from 'lucide-svelte';
+	import { AtSign, Key, UserPlus, Mail, Check, X } from 'lucide-svelte';
 	import { enhance } from '$app/forms';
 
 	let { form } = $props<{ form: any }>();
 	let isLoading = $state(false);
-</script>
+
+	let username = $state('');
+	let isUsernameAvailable = $state<boolean | null>(null);
+	let isCheckingUsername = $state(false);
+
+	async function checkUsernameManual() {
+		if (username.trim() === '') {
+			isUsernameAvailable = null;
+			return;
+		}
+		isCheckingUsername = true;
+		try {
+			console.log('Sending check request for username:', username);
+			const res = await fetch(`/api/auth/check-username?username=${encodeURIComponent(username)}`);
+			const data = await res.json();
+			console.log('Received response:', data);
+			isUsernameAvailable = data.available;
+		} catch (e) {
+			console.error('Error during fetch:', e); alert('Error: ' + e.message);
+		} finally {
+			isCheckingUsername = false;
+		}
+	}
+
+	</script>
 
 <div class="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0B0E14] p-6 text-white">
 	<div class="pointer-events-none absolute inset-0 z-0 opacity-10" style="background: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%232A3241\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
@@ -32,14 +56,36 @@
 			{/if}
 
 			{#if !form?.success}
-			<form method="POST" use:enhance={() => { isLoading = true; return async ({ update }) => { await update(); isLoading = false; }; }}>
+			<form method="POST" use:enhance={({ cancel }) => { 
+					if (isUsernameAvailable !== true) {
+						alert('Silakan tekan tombol Check untuk memverifikasi ketersediaan Username Anda.');
+						cancel();
+						return;
+					}
+					isLoading = true; 
+					return async ({ update }) => { await update(); isLoading = false; }; 
+				}}>
 				<div class="mb-6 space-y-4">
 					<div class="group relative">
 						<label class="mb-1 block text-xs font-medium text-gray-400" for="username">Username</label>
-						<div class="relative flex items-center">
-							<AtSign class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]" size={20} />
-							<input name="username" id="username" class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none" placeholder="admin_user" type="text" required />
+						<div class="relative flex items-center gap-2">
+							<div class="relative flex-1 items-center flex">
+								<AtSign class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]" size={20} />
+								<input bind:value={username} oninput={() => isUsernameAvailable = null} name="username" id="username" class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none" placeholder="admin_user" type="text" required />
+							</div>
+							<button type="button" onclick={checkUsernameManual} disabled={isCheckingUsername || !username} class="flex h-[38px] items-center justify-center rounded-lg bg-[#2A3241] px-4 text-xs font-medium text-white transition-colors hover:bg-[#323b4d] disabled:opacity-50 shrink-0">
+								{#if isCheckingUsername}
+									<span class="animate-pulse">...</span>
+								{:else}
+									Check
+								{/if}
+							</button>
 						</div>
+						{#if isUsernameAvailable === true}
+							<p class="mt-2 flex items-center gap-1 text-xs text-green-400"><Check size={14} /> Username tersedia</p>
+						{:else if isUsernameAvailable === false}
+							<p class="mt-2 flex items-center gap-1 text-xs text-red-400"><X size={14} /> Username sudah dipakai</p>
+						{/if}
 					</div>
 					<div class="group relative">
 						<label class="mb-1 block text-xs font-medium text-gray-400" for="email">Email</label>

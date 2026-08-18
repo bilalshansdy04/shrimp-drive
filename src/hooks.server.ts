@@ -47,7 +47,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		'/privacy',
 		'/login/google',
 		'/login/google/callback'
-	];
+	, '/api/auth/check-username'];
 	const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
 	const isVerifyEmailRoute = pathname.startsWith('/verify-email');
 	const isResetPasswordRoute = pathname.startsWith('/reset-password/');
