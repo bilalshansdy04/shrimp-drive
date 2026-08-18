@@ -139,9 +139,9 @@
 				<div class="flex-1 overflow-hidden">
 					<p class="truncate text-sm font-medium">{data.user?.displayName || 'User Account'}</p>
 				</div>
-				<button class="p-1 text-gray-400 transition-colors hover:text-white" title="Settings">
+				<a href="/profile" class="p-1 text-gray-400 transition-colors hover:text-white" title="Settings">
 					<Settings size={16} />
-				</button>
+				</a>
 				<form action="/logout" method="POST" use:enhance class="flex">
 					<button class="p-1 text-gray-400 transition-colors hover:text-white" type="submit" title="Log Out">
 						<LogOut size={16} />

@@ -1,16 +1,21 @@
-export async function uploadFileToTelegram(botToken: string, chatId: string, file: File | Blob, filename: string) {
-    const url = `https://api.telegram.org/bot${botToken}/sendDocument`;
+import * as fs from 'fs';
+
+const p = 'd:/Projects/shrimp-drive/src/lib/server/telegram.ts';
+let code = fs.readFileSync(p, 'utf-8');
+
+const newFunc = export async function uploadFileToTelegram(botToken: string, chatId: string, file: File | Blob, filename: string) {
+    const url = \https://api.telegram.org/bot\/sendDocument\;
     
     const formData = new FormData();
     formData.append('chat_id', chatId);
     formData.append('document', file, filename);
 
-    
     try {
         const res = await fetch(url, {
             method: 'POST',
             body: formData
         });
+        
         const data = await res.json();
         
         if (!data.ok) {
@@ -35,18 +40,7 @@ export async function uploadFileToTelegram(botToken: string, chatId: string, fil
     } catch (err: any) {
         throw err;
     }
-}
+};
 
-export async function getFileDownloadUrl(botToken: string, fileId: string) {
-    const url = `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`;
-    
-    const res = await fetch(url);
-    const data = await res.json();
-    
-    if (!data.ok) {
-        throw new Error(data.description || 'Failed to get file from Telegram');
-    }
-    
-    const filePath = data.result.file_path;
-    return `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-}
+code = code.replace(/export async function uploadFileToTelegram[\s\S]*?\}\n\n/, newFunc + '\n\n');
+fs.writeFileSync(p, code);

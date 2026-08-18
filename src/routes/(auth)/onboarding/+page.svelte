@@ -1,38 +1,77 @@
 <script lang="ts">
   import {
-    User,
-    AtSign,
-    Key,
     ArrowRight,
     ArrowLeft,
     KeyRound,
     CheckCircle2,
     Hash,
     Rocket,
-    LayoutDashboard
+    Gift
   } from "lucide-svelte";
 
   let currentStep = $state(1);
+  let inviteCode = $state("");
+  let inviteType = $state("");
   let botToken = $state("");
   let botVerified = $state(false);
-  let displayName = $state("");
-  let username = $state("");
-  let password = $state("");
   let chatId = $state("");
   let pingSuccess = $state(false);
   
   let isLoading = $state(false);
   let errorMsg = $state("");
 
-  function nextStep() {
-    if (currentStep < 4) currentStep++;
+  async function verifyInviteCode() {
+    errorMsg = "";
+    
+    // Allow empty code (Skip)
+    if (!inviteCode) {
+      inviteType = 'regular_self_setup';
+      currentStep = 2; // Go to bot setup
+      return;
+    }
+
+    if (inviteCode.length < 5) {
+      errorMsg = "Invalid invite code length.";
+      return;
+    }
+    
+    isLoading = true;
+    try {
+      const res = await fetch('/api/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: inviteCode })
+      });
+      const data = await res.json();
+      if (data.success) {
+        inviteType = data.type;
+        if (inviteType === 'friend_zero_setup') {
+          currentStep = 4; // Jump to ready
+        } else {
+          currentStep = 2; // Go to bot setup
+        }
+      } else {
+        errorMsg = data.error;
+      }
+    } catch (e) {
+      errorMsg = "Failed to verify code.";
+    }
+    isLoading = false;
   }
 
   function prevStep() {
     if (currentStep > 1) {
-      currentStep--;
+      if (inviteType === 'friend_zero_setup' && currentStep === 4) {
+        currentStep = 1;
+      } else {
+        currentStep--;
+      }
       errorMsg = "";
     }
+  }
+
+  function nextStep() {
+    if (currentStep < 4) currentStep++;
   }
 
   async function verifyBot() {
@@ -92,11 +131,9 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          displayName,
-          username,
-          password,
-          botToken,
-          chatId
+          code: inviteCode,
+          botToken: inviteType === 'regular_self_setup' ? botToken : undefined,
+          chatId: inviteType === 'regular_self_setup' ? chatId : undefined
         })
       });
       const data = await res.json();
@@ -105,11 +142,9 @@
         window.location.href = '/dashboard';
       } else {
         errorMsg = data.error || 'Failed to finish onboarding.';
-        currentStep = 1; // back to start to fix errors
       }
     } catch (err) {
       errorMsg = 'An unexpected error occurred.';
-      currentStep = 1;
     }
     isLoading = false;
   }
@@ -145,7 +180,7 @@
         <!-- Node 1 -->
         <div class="flex flex-col items-center gap-1">
           <div class="w-3 h-3 rounded-full transition-all duration-300 {currentStep >= 1 ? 'bg-[#FF6B4A] shadow-[0_0_0_4px_rgba(255,107,74,0.2)]' : 'bg-[#151921] border-2 border-[#2A3241]'}"></div>
-          <span class="text-xs font-medium {currentStep >= 1 ? 'text-[#FF6B4A]' : 'text-gray-400'}">Profile</span>
+          <span class="text-xs font-medium {currentStep >= 1 ? 'text-[#FF6B4A]' : 'text-gray-400'}">Invite</span>
         </div>
         <div class="flex-grow h-0.5 mx-2 transition-colors duration-300 {currentStep >= 2 ? 'bg-[#FF6B4A]' : 'bg-[#2A3241]'}"></div>
         
@@ -170,39 +205,25 @@
         </div>
       </div>
 
-      <!-- Step 1: Admin Profile -->
+      <!-- Step 1: Invitation Code -->
       {#if currentStep === 1}
         <section class="animate-[fadeIn_0.3s_ease]">
-          <h2 class="text-2xl font-bold text-white mb-2">Admin Profile</h2>
-          <p class="text-sm text-gray-400 mb-6">Configure your master administrator account for Shrimp Drive.</p>
+          <h2 class="text-2xl font-bold text-white mb-2">Invitation Code</h2>
+          <p class="text-sm text-gray-400 mb-6">Enter your invitation code provided by the administrator to configure your storage backend.</p>
           
           <div class="space-y-4">
             <div class="relative group">
-              <label class="block text-xs font-medium text-gray-400 mb-1" for="displayName">Display Name</label>
+              <label class="block text-xs font-medium text-gray-400 mb-1" for="inviteCode">Code</label>
               <div class="relative flex items-center">
-                <User class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input bind:value={displayName} id="displayName" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="Admin" type="text"/>
-              </div>
-            </div>
-            <div class="relative group">
-              <label class="block text-xs font-medium text-gray-400 mb-1" for="username">Username</label>
-              <div class="relative flex items-center">
-                <AtSign class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input bind:value={username} id="username" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="admin_user" type="text"/>
-              </div>
-            </div>
-            <div class="relative group">
-              <label class="block text-xs font-medium text-gray-400 mb-1" for="password">Master Password</label>
-              <div class="relative flex items-center">
-                <Key class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input bind:value={password} id="password" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="••••••••" type="password"/>
+                <Gift class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
+                <input bind:value={inviteCode} id="inviteCode" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="e.g. SHRIMP-123" type="text"/>
               </div>
             </div>
           </div>
           
           <div class="flex justify-end mt-8 pt-4 border-t border-[#2A3241]">
-            <button class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-2 flex items-center gap-2 text-sm transition-colors" onclick={nextStep}>
-              Next <ArrowRight size={18} />
+            <button class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-2 flex items-center gap-2 text-sm transition-colors disabled:opacity-50" onclick={verifyInviteCode} disabled={isLoading}>
+              {isLoading ? 'Verifying...' : 'Next'} <ArrowRight size={18} />
             </button>
           </div>
         </section>
@@ -318,12 +339,17 @@
               Connection Established
             </div>
             <div class="text-sm font-medium text-white">Capacity: Unlimited (TG Backend)</div>
-            <div class="text-xs text-gray-400">Allocated: 8.0 GB / Speed: Optimal</div>
+            <div class="text-xs text-gray-400">Allocated: dynamically / Speed: Optimal</div>
           </div>
           
-          <button disabled={isLoading} onclick={submitOnboarding} class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-3 flex justify-center items-center gap-2 text-base transition-colors w-full disabled:opacity-50">
-            {isLoading ? 'Configuring System...' : 'Launch Drive'} <Rocket size={20} />
-          </button>
+          <div class="flex justify-between mt-8 pt-4 border-t border-[#2A3241]">
+            <button class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 flex items-center gap-2 text-sm transition-colors" onclick={prevStep}>
+              <ArrowLeft size={18} /> Back
+            </button>
+            <button disabled={isLoading} onclick={submitOnboarding} class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-2 flex justify-center items-center gap-2 text-sm transition-colors disabled:opacity-50">
+              {isLoading ? 'Configuring System...' : 'Launch Drive'} <Rocket size={18} />
+            </button>
+          </div>
         </section>
       {/if}
       

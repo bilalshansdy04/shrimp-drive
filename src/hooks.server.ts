@@ -25,15 +25,82 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const pathname = event.url.pathname;
-	const isAuthRoute = pathname === '/login' || pathname === '/onboarding';
+	
+	// Handle CORS for admin API
+	if (pathname.startsWith('/api/admin/')) {
+		if (event.request.method === 'OPTIONS') {
+			return new Response(null, {
+				headers: {
+					'Access-Control-Allow-Origin': '*',
+					'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+					'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+				}
+			});
+		}
+	}
+	
+	const publicRoutes = [
+		'/login',
+		'/register',
+		'/forgot-password',
+		'/about',
+		'/privacy',
+		'/login/google',
+		'/login/google/callback'
+	];
+	const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
+	const isVerifyEmailRoute = pathname.startsWith('/verify-email');
+	const isResetPasswordRoute = pathname.startsWith('/reset-password/');
 
-	if (!event.locals.user && !isAuthRoute) {
+	const isAuthRoute = pathname === '/login' || pathname === '/register';
+
+	if (!event.locals.user && !isPublicRoute && !isVerifyEmailRoute && !isResetPasswordRoute && !pathname.startsWith('/api/admin/')) {
 		throw redirect(303, '/login');
 	}
 
-	if (event.locals.user && isAuthRoute) {
-		throw redirect(303, '/dashboard');
+	if (event.locals.user) {
+		if (event.locals.user.isSuspended) {
+			if (pathname.startsWith('/api/')) {
+				return new Response(JSON.stringify({ error: 'Account Suspended' }), {
+					status: 403,
+					headers: { 'Content-Type': 'application/json' }
+				});
+			} else {
+				// Destroy session cookies if suspended user tries to navigate to normal pages
+				if (event.locals.session) {
+					const { invalidateSession } = await import('$lib/server/auth');
+					await invalidateSession(event.locals.session.id);
+				}
+				event.cookies.delete('session_id', { path: '/' });
+				event.locals.user = null;
+				event.locals.session = null;
+				// Instead of throw redirect (which might cause loop if cookie persists), 
+				// redirect to login with query param. If we are already on login, do nothing to break loop.
+				if (pathname !== '/login') {
+					throw redirect(303, '/login?error=suspended');
+				}
+			}
+		}
+
+		if (isAuthRoute) {
+			throw redirect(303, '/dashboard');
+		}
+
+		// If user is logged in but hasn't onboarded (telegram setup), force onboarding
+		// Exclude onboarding route itself to prevent redirect loop
+		if (!event.locals.user.telegramBotToken && pathname !== '/onboarding' && !pathname.startsWith('/api/')) {
+			throw redirect(303, '/onboarding');
+		}
 	}
 
-	return resolve(event);
+	const response = await resolve(event);
+
+	// Attach CORS headers for admin API
+	if (pathname.startsWith('/api/admin/')) {
+		response.headers.set('Access-Control-Allow-Origin', '*');
+		response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+		response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+	}
+
+	return response;
 };
