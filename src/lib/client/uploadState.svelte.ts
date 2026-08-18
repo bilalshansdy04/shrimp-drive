@@ -131,7 +131,7 @@ class UploadState {
 			}
 
 			nextItem.status = 'wait_send';
-			await wait(500);
+			await wait(1000);
 
 			if (nextItem._sendFinished) {
 				nextItem.status = nextItem._sendSuccess ? 'completed' : 'error';
@@ -155,12 +155,7 @@ class UploadState {
 				if (nextItem._sendSuccess) {
 					await invalidateAll();
 				}
-			}
-			
-			await wait(500);
-		}
-
-		this.isSendingActive = false;
+			} await wait(1000); } this.isSendingActive = false;
 	}
 
 	private async uploadItemToVPS(item: UploadItem) {
@@ -326,3 +321,4 @@ class UploadState {
 }
 
 export const uploadState = new UploadState();
+
