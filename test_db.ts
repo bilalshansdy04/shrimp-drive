@@ -1,1 +1,0 @@
-import { db } from './src/lib/server/db'; import { users } from './src/lib/server/db/schema'; async function main() { const allUsers = await db.select().from(users); console.log('Users:', allUsers); process.exit(0); } main();
