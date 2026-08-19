@@ -59,6 +59,35 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
+		const conflictAction = formData.get('conflictAction') as string | null;
+		const replaceFileId = formData.get('replaceFileId') as string | null;
+
+		let finalFileName = file.name;
+		if (conflictAction !== 'replace') {
+			let counter = 1;
+			let nameBase = file.name;
+			let nameExt = '';
+			const lastDotIdx = file.name.lastIndexOf('.');
+			if (lastDotIdx > 0) {
+				nameBase = file.name.substring(0, lastDotIdx);
+				nameExt = file.name.substring(lastDotIdx);
+			}
+
+			const { and, eq, isNull } = await import('drizzle-orm');
+			while (true) {
+				const existing = await db.query.files.findFirst({
+					where: and(
+						eq(files.userId, locals.user.id),
+						folderId ? eq(files.folderId, folderId) : isNull(files.folderId),
+						eq(files.fileName, finalFileName)
+					)
+				});
+				if (!existing) break;
+				finalFileName = `${nameBase}(${counter})${nameExt}`;
+				counter++;
+			}
+		}
+
 		let metadata: any = {};
 
 		if (fileType === 'audio') {
@@ -112,16 +141,43 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			locals.user.telegramBotToken,
 			locals.user.telegramChatId,
 			file,
-			file.name
+			finalFileName
 		);
 
-		const fileId = crypto.randomUUID();
+		let fileId: string = crypto.randomUUID();
+
+		if (conflictAction === 'replace' && replaceFileId) {
+			const { and, eq } = await import('drizzle-orm');
+			const existingFile = await db.query.files.findFirst({
+				where: and(eq(files.id, replaceFileId), eq(files.userId, locals.user.id))
+			});
+
+			if (existingFile) {
+				fileId = existingFile.id;
+				await db.update(files).set({
+					fileType: fileType,
+					mimeType: file.type || 'application/octet-stream',
+					fileSize: file.size,
+					telegramFileId: tgResult.telegramFileId,
+					title: metadata.title,
+					artist: metadata.artist,
+					album: metadata.album,
+					duration: metadata.duration ? Math.round(metadata.duration) : null,
+					thumbnailUrl: metadata.thumbnailUrl || null
+				}).where(eq(files.id, fileId));
+
+				const sizeDiff = file.size - existingFile.fileSize;
+				await db.update(users).set({ storageUsed: locals.user.storageUsed + sizeDiff }).where(eq(users.id, locals.user.id));
+				
+				return json({ success: true, fileId });
+			}
+		}
 
 		await db.insert(files).values({
 			id: fileId,
 			userId: locals.user.id,
 			folderId: folderId || null,
-			fileName: file.name,
+			fileName: finalFileName,
 			fileType: fileType,
 			mimeType: file.type || 'application/octet-stream',
 			fileSize: file.size,
@@ -139,6 +195,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json({ success: true, fileId });
 	} catch (error: any) {
 		console.error('Upload error:', error);
+		if (error.retryAfter) {
+			return json({ error: error.message, retryAfter: error.retryAfter }, { status: 429 });
+		}
 		return json({ error: error.message || 'Internal Server Error' }, { status: 500 });
 	}
 };

@@ -21,8 +21,8 @@
 			const data = await res.json();
 			console.log('Received response:', data);
 			isUsernameAvailable = data.available;
-		} catch (e) {
-			console.error('Error during fetch:', e); alert('Error: ' + e.message);
+		} catch (e: any) {
+			console.error('Error during fetch:', e); alert('Error: ' + (e.message || 'Unknown error'));
 		} finally {
 			isCheckingUsername = false;
 		}

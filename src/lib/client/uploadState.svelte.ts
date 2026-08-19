@@ -1,7 +1,7 @@
 import { invalidateAll } from '$app/navigation';
 import { toast } from 'svelte-sonner';
 
-export type UploadStatus = 'idle' | 'extracting_thumb' | 'uploading' | 'cooldown' | 'queued_for_sending' | 'wait_send' | 'sending' | 'completed' | 'error';
+export type UploadStatus = 'conflict' | 'idle' | 'extracting_thumb' | 'uploading' | 'cooldown' | 'queued_for_sending' | 'wait_send' | 'sending' | 'completed' | 'error';
 
 export interface UploadItem {
 	id: string;
@@ -10,11 +10,14 @@ export interface UploadItem {
 	progress: number;
 	errorMsg?: string;
 	folderId?: string | null;
+	conflictAction?: 'rename' | 'replace';
+	replaceFileId?: string;
 	_resolveUpload?: () => void;
 	_resolveSend?: (success: boolean, err?: string) => void;
 	_sendFinished?: boolean;
 	_sendSuccess?: boolean;
 	_sendErr?: string;
+	_xhr?: XMLHttpRequest;
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,9 +25,14 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 class UploadState {
 	items = $state<UploadItem[]>([]);
 	isOpen = $state(false);
+	globalCooldownUntil = $state(0);
 	
 	isUploadingActive = $state(false);
 	isSendingActive = $state(false);
+	
+	get isRateLimited() {
+		return this.globalCooldownUntil > Date.now();
+	}
 
 	get totalItems() {
 		return this.items.length;
@@ -38,24 +46,51 @@ class UploadState {
 		return this.items.filter((i) => i.status !== 'completed' && i.status !== 'error');
 	}
 
-	addFiles(files: FileList | File[], folderId?: string | null) {
+	async addFiles(files: FileList | File[], folderId?: string | null) {
 		if (this.pendingItems.length === 0) {
 			this.items = [];
 		}
 
+		const validFiles: File[] = [];
 		for (let i = 0; i < files.length; i++) {
 			const file = files[i];
 			if (file.size > 20 * 1024 * 1024) {
 				toast.error(`File ${file.name} exceeds 20MB limit.`);
 				continue;
 			}
+			validFiles.push(file);
+		}
 
+		if (validFiles.length === 0) return;
+
+		// Check conflicts
+		const fileNames = validFiles.map(f => f.name);
+		let conflictsMap = new Map<string, string>(); // fileName -> fileId
+		try {
+			const res = await fetch('/api/files/check-conflicts', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ folderId, fileNames })
+			});
+			if (res.ok) {
+				const data = await res.json();
+				for (const conflict of data.conflicts || []) {
+					conflictsMap.set(conflict.fileName, conflict.fileId);
+				}
+			}
+		} catch(e) {
+			console.error('Failed to check conflicts', e);
+		}
+
+		for (const file of validFiles) {
+			const isConflict = conflictsMap.has(file.name);
 			this.items.push({
 				id: crypto.randomUUID(),
 				file,
-				status: 'idle',
+				status: isConflict ? 'conflict' : 'idle',
 				progress: 0,
 				folderId,
+				replaceFileId: isConflict ? conflictsMap.get(file.name) : undefined,
 				_sendFinished: false
 			});
 		}
@@ -68,10 +103,47 @@ class UploadState {
 	}
 
 	removeFile(id: string) {
+		const item = this.items.find((i) => i.id === id);
+		if (item && item._xhr) {
+			item._xhr.abort();
+		}
 		this.items = this.items.filter((i) => i.id !== id);
 		if (this.items.length === 0) {
 			this.isOpen = false;
 		}
+	}
+
+	cancelItem(id: string) {
+		this.removeFile(id);
+	}
+
+	resolveConflict(id: string, action: 'skip' | 'continue' | 'replace') {
+		const item = this.items.find((i) => i.id === id);
+		if (!item || item.status !== 'conflict') return;
+
+		if (action === 'skip') {
+			this.removeFile(id);
+		} else if (action === 'continue') {
+			item.conflictAction = 'rename';
+			item.status = 'idle';
+			this.processUploadQueue();
+			this.processSendingQueue();
+		} else if (action === 'replace') {
+			item.conflictAction = 'replace';
+			item.status = 'idle';
+			this.processUploadQueue();
+			this.processSendingQueue();
+		}
+	}
+
+	cancelAll() {
+		for (const item of this.items) {
+			if (item._xhr) {
+				item._xhr.abort();
+			}
+		}
+		this.items = [];
+		this.isOpen = false;
 	}
 
 	clearCompleted() {
@@ -86,8 +158,20 @@ class UploadState {
 		this.isUploadingActive = true;
 
 		while (true) {
+			if (Date.now() < this.globalCooldownUntil) {
+				await wait(1000);
+				continue;
+			}
+
 			const nextItem = this.items.find((i) => i.status === 'idle');
-			if (!nextItem) break;
+			if (!nextItem) {
+				const stillCooldown = this.items.some(i => i.status === 'cooldown' || i.status === 'queued_for_sending' || i.status === 'sending' || i.status === 'wait_send');
+				if (stillCooldown || Date.now() < this.globalCooldownUntil) {
+					await wait(500);
+					continue;
+				}
+				break;
+			}
 
 			await this.uploadItemToVPS(nextItem);
 			
@@ -155,7 +239,10 @@ class UploadState {
 				if (nextItem._sendSuccess) {
 					await invalidateAll();
 				}
-			} await wait(1000); } this.isSendingActive = false;
+			}
+			await wait(1000);
+		}
+		this.isSendingActive = false;
 	}
 
 	private async uploadItemToVPS(item: UploadItem) {
@@ -166,6 +253,12 @@ class UploadState {
 
 		if (item.folderId) {
 			formData.append('folderId', item.folderId);
+		}
+		if (item.conflictAction) {
+			formData.append('conflictAction', item.conflictAction);
+		}
+		if (item.replaceFileId) {
+			formData.append('replaceFileId', item.replaceFileId);
 		}
 
 		if (item.file.type.startsWith('video/')) {
@@ -255,12 +348,13 @@ class UploadState {
 
 		return new Promise<void>((resolveUpload) => {
 			const xhr = new XMLHttpRequest();
+			item._xhr = xhr;
 			let hasResolvedUpload = false;
 
-			const triggerUploadDone = () => {
+			const triggerUploadDone = (isRateLimited = false) => {
 				if (!hasResolvedUpload) {
 					hasResolvedUpload = true;
-					if (item.status === 'uploading') {
+					if (item.status === 'uploading' && !isRateLimited) {
 						item.status = 'queued_for_sending';
 					}
 					resolveUpload();
@@ -277,10 +371,24 @@ class UploadState {
 			});
 
 			xhr.addEventListener('load', () => {
-				triggerUploadDone();
-
 				let success = false;
 				let errMsg = 'Upload failed';
+
+				if (xhr.status === 429) {
+					try {
+						const responseData = JSON.parse(xhr.responseText);
+						const retryAfter = responseData.retryAfter || 25;
+						this.globalCooldownUntil = Date.now() + retryAfter * 1000;
+					} catch {
+						this.globalCooldownUntil = Date.now() + 25000;
+					}
+					item.status = 'idle';
+					item.progress = 0;
+					triggerUploadDone(true);
+					return;
+				}
+
+				triggerUploadDone();
 
 				if (xhr.status >= 200 && xhr.status < 300) {
 					success = true;
@@ -305,12 +413,25 @@ class UploadState {
 
 			xhr.addEventListener('error', () => {
 				triggerUploadDone();
+				item.status = 'error';
 				if (item._resolveSend) {
-					item._resolveSend(false, 'Connection error');
+					item._resolveSend(false, 'Connection error or aborted');
 				} else {
 					item._sendFinished = true;
 					item._sendSuccess = false;
-					item._sendErr = 'Connection error';
+					item._sendErr = 'Connection error or aborted';
+				}
+			});
+			
+			xhr.addEventListener('abort', () => {
+				triggerUploadDone();
+				item.status = 'error';
+				if (item._resolveSend) {
+					item._resolveSend(false, 'Upload aborted');
+				} else {
+					item._sendFinished = true;
+					item._sendSuccess = false;
+					item._sendErr = 'Upload aborted';
 				}
 			});
 
@@ -321,4 +442,3 @@ class UploadState {
 }
 
 export const uploadState = new UploadState();
-

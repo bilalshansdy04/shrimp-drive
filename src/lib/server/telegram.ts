@@ -14,6 +14,12 @@ export async function uploadFileToTelegram(botToken: string, chatId: string, fil
         const data = await res.json();
         
         if (!data.ok) {
+            if (data.error_code === 429) {
+                const retryAfter = data.parameters?.retry_after || 25;
+                const err = new Error(data.description || `Too Many Requests: retry after ${retryAfter}`);
+                (err as any).retryAfter = retryAfter;
+                throw err;
+            }
             throw new Error(data.description || 'Failed to upload to Telegram');
         }
         
