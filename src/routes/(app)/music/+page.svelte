@@ -19,7 +19,9 @@
 		Volume2,
 		Mic2,
 		ArrowUpDown,
-		Check
+		Check,
+		Download,
+		X
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import { media } from '$lib/client/mediaState.svelte';
@@ -32,6 +34,70 @@
 	let viewMode = $state<'list' | 'grid'>('list');
 	let sortBy = $state<'date' | 'name' | 'artist' | 'album'>('date');
 	let sortOrder = $state<'asc' | 'desc'>('desc');
+	
+	let selectionMode = $state(false);
+	let selectedIds = $state<string[]>([]);
+
+	function toggleSelection(id: string) {
+		if (selectedIds.includes(id)) {
+			selectedIds = selectedIds.filter(i => i !== id);
+		} else {
+			selectedIds = [...selectedIds, id];
+		}
+	}
+
+	function toggleSelectionMode() {
+		selectionMode = !selectionMode;
+		if (!selectionMode) selectedIds = [];
+	}
+
+	function downloadFile(id: string) {
+		const link = document.createElement('a');
+		link.href = `/api/files/${id}/download`;
+		link.download = '';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	}
+
+	function downloadSelected() {
+		selectedIds.forEach((id, index) => {
+			setTimeout(() => {
+				downloadFile(id);
+			}, index * 500);
+		});
+		toggleSelectionMode();
+	}
+
+	function longpress(node: HTMLElement, { duration, callback }: { duration: number, callback: () => void }) {
+		let timer: ReturnType<typeof setTimeout>;
+		
+		const handleMousedown = () => {
+			timer = setTimeout(() => {
+				callback();
+			}, duration);
+		};
+		
+		const handleMouseup = () => {
+			clearTimeout(timer);
+		};
+
+		node.addEventListener('mousedown', handleMousedown);
+		node.addEventListener('mouseup', handleMouseup);
+		node.addEventListener('touchstart', handleMousedown);
+		node.addEventListener('touchend', handleMouseup);
+		node.addEventListener('touchcancel', handleMouseup);
+		
+		return {
+			destroy() {
+				node.removeEventListener('mousedown', handleMousedown);
+				node.removeEventListener('mouseup', handleMouseup);
+				node.removeEventListener('touchstart', handleMousedown);
+				node.removeEventListener('touchend', handleMouseup);
+				node.removeEventListener('touchcancel', handleMouseup);
+			}
+		};
+	}
 
 	let audioFiles = $derived(
 		[...data.audioFiles].sort((a: any, b: any) => {
@@ -109,7 +175,12 @@
 			<h1 class="mb-1 text-3xl font-bold text-white">Music Library</h1>
 			<p class="text-sm text-gray-400">{audioFiles.length} tracks • {formatBytes(totalSize)}</p>
 		</div>
+		
+		{#if !selectionMode}
 		<div class="flex items-center gap-2">
+			<button class="md:hidden flex items-center justify-center rounded-lg border border-[#2A3241] bg-[#151921] p-2 text-gray-400 transition-colors hover:bg-[#1E2430] hover:text-white" onclick={() => selectionMode = true} title="Select Items">
+				<Check size={18} />
+			</button>
 			<div class="relative">
 				<button
 					onclick={() => (showSortMenu = !showSortMenu)}
@@ -217,6 +288,20 @@
 				{/if}
 			</button>
 		</div>
+		{:else}
+		<div class="flex flex-1 items-center justify-between rounded-lg border border-[#FF6B4A] bg-[#FF6B4A]/10 px-4 py-2 ml-4">
+			<div class="flex items-center gap-3 text-[#FF6B4A]">
+				<button onclick={toggleSelectionMode}><X size={20} /></button>
+				<span class="font-medium text-sm sm:text-base">{selectedIds.length} Selected</span>
+			</div>
+			<div class="flex items-center gap-3">
+				<button onclick={() => selectedIds = audioFiles.map(f => f.id)} class="text-sm font-medium text-[#FF6B4A] hover:underline">Select All</button>
+				<button onclick={downloadSelected} class="flex items-center gap-1 rounded bg-[#FF6B4A] px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50" disabled={selectedIds.length === 0}>
+					<Download size={16} /> <span class="hidden sm:inline">Download</span>
+				</button>
+			</div>
+		</div>
+		{/if}
 	</div>
 
 	{#if showLyrics}
@@ -341,16 +426,16 @@
 					<p>No tracks found.</p>
 				</div>
 			{:else if viewMode === 'list'}
-				<div class="overflow-x-auto">
-					<table class="w-full border-collapse text-left">
+				<div class="w-full">
+					<table class="w-full border-collapse text-left table-fixed">
 						<thead>
 							<tr class="border-b border-[#2A3241] bg-[#10131a]">
-								<th class="w-12 px-4 py-3 text-center text-xs font-medium text-gray-400">#</th>
-								<th class="px-4 py-3 text-xs font-medium text-gray-400">Name</th>
+								<th class="w-10 sm:w-12 px-2 sm:px-4 py-3 text-center text-xs font-medium text-gray-400">#</th>
+								<th class="px-2 sm:px-4 py-3 text-xs font-medium text-gray-400">Name</th>
 								<th class="hidden px-4 py-3 text-xs font-medium text-gray-400 sm:table-cell"
 									>Artist</th
 								>
-								<th class="w-24 px-4 py-3 text-right text-xs font-medium text-gray-400">Duration</th
+								<th class="hidden w-24 px-4 py-3 text-right text-xs font-medium text-gray-400 sm:table-cell">Duration</th
 								>
 								<th
 									class="hidden w-28 px-4 py-3 text-right text-xs font-medium text-gray-400 md:table-cell"
@@ -360,17 +445,38 @@
 									class="hidden w-32 px-4 py-3 text-right text-xs font-medium text-gray-400 lg:table-cell"
 									>Added</th
 								>
-								<th class="w-12 px-4 py-3 text-center"></th>
+								<th class="w-12 sm:w-16 px-2 py-3 text-center"></th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-[#2A3241]/50 text-sm text-white">
 							{#each audioFiles as track, index}
 								<tr
-									class="group cursor-pointer transition-colors hover:bg-[#1E2430]"
-									onclick={() => media.playTrack(index, audioFiles)}
+									class="group cursor-pointer transition-colors hover:bg-[#1E2430] {selectionMode && selectedIds.includes(track.id) ? 'bg-[#FF6B4A]/10' : ''}"
+									use:longpress={{
+										duration: 500,
+										callback: () => {
+											if (!selectionMode) {
+												selectionMode = true;
+												selectedIds = [track.id];
+											}
+										}
+									}}
+									onclick={() => {
+										if (selectionMode) {
+											toggleSelection(track.id);
+										} else {
+											media.playTrack(index, audioFiles);
+										}
+									}}
 								>
-									<td class="px-4 py-3 text-center text-xs text-gray-400">
-										{#if media.currentTrack?.id === track.id && !media.isPaused}
+									<td class="px-2 sm:px-4 py-3 text-center text-xs text-gray-400">
+										{#if selectionMode}
+											<div class="h-4 w-4 rounded border {selectedIds.includes(track.id) ? 'bg-[#FF6B4A] border-[#FF6B4A]' : 'border-[#2A3241]'} mx-auto flex items-center justify-center">
+												{#if selectedIds.includes(track.id)}
+													<Check size={12} class="text-black" />
+												{/if}
+											</div>
+										{:else if media.currentTrack?.id === track.id && !media.isPaused}
 											<div class="text-primary-container mx-auto h-3 w-3">
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -388,7 +494,7 @@
 											/>
 										{/if}
 									</td>
-									<td class="px-4 py-3">
+									<td class="px-2 sm:px-4 py-3">
 										<div class="flex items-center gap-3">
 											<div
 												class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-[#2A3241] bg-[#10131a]"
@@ -410,7 +516,7 @@
 									<td class="hidden max-w-[120px] truncate px-4 py-3 text-gray-400 sm:table-cell"
 										>{track.artist || 'Unknown Artist'}</td
 									>
-									<td class="px-4 py-3 text-right text-xs text-gray-400 tabular-nums"
+									<td class="hidden px-4 py-3 text-right text-xs text-gray-400 tabular-nums sm:table-cell"
 										>{formatTime(track.duration || 0)}</td
 									>
 									<td
@@ -420,10 +526,15 @@
 									<td class="hidden px-4 py-3 text-right text-xs text-gray-400 lg:table-cell"
 										>{formatDate(track.createdAt)}</td
 									>
-									<td class="px-4 py-3 text-center">
+									<td class="px-2 py-3 text-center">
 										<button
-											class="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-white"
-											><MoreVertical size={18} /></button
+											onclick={(e) => {
+												e.stopPropagation();
+												downloadFile(track.id);
+											}}
+											class="text-gray-400 opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 hover:text-[#FF6B4A]"
+											title="Download"
+											><Download size={18} /></button
 										>
 									</td>
 								</tr>
@@ -435,9 +546,31 @@
 				<div class="grid grid-cols-2 gap-4 p-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 					{#each audioFiles as track, index}
 						<div
-							class="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#2A3241] bg-[#10131a] transition-colors hover:border-[#FF6B4A]"
-							onclick={() => media.playTrack(index, audioFiles)}
+							class="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#2A3241] bg-[#10131a] transition-colors hover:border-[#FF6B4A] {selectionMode && selectedIds.includes(track.id) ? 'border-[#FF6B4A] ring-2 ring-[#FF6B4A]' : ''}"
+							use:longpress={{
+								duration: 500,
+								callback: () => {
+									if (!selectionMode) {
+										selectionMode = true;
+										selectedIds = [track.id];
+									}
+								}
+							}}
+							onclick={() => {
+								if (selectionMode) {
+									toggleSelection(track.id);
+								} else {
+									media.playTrack(index, audioFiles);
+								}
+							}}
 						>
+							{#if selectionMode}
+								<div class="absolute top-2 right-2 z-20 h-5 w-5 rounded-full border flex items-center justify-center bg-black/50 {selectedIds.includes(track.id) ? 'bg-[#FF6B4A] border-[#FF6B4A]' : 'border-white'}">
+									{#if selectedIds.includes(track.id)}
+										<Check size={14} class="text-black" />
+									{/if}
+								</div>
+							{/if}
 							<div class="relative aspect-square w-full overflow-hidden bg-black/40">
 								<img
 									src={track.thumbnailUrl || defaultMusicCover}
