@@ -285,32 +285,69 @@
 
 {#if media.currentTrack}
 	<div
-		class="fixed right-0 bottom-0 left-0 z-50 flex h-24 items-center justify-between border-t border-[#2A3241] bg-[#0B0E14]/95 px-6 backdrop-blur md:left-[260px]"
+		class="fixed right-0 bottom-0 left-0 z-50 flex h-auto md:h-24 flex-col md:flex-row items-center justify-between border-t border-[#2A3241] bg-[#0B0E14]/95 p-3 md:p-0 md:px-6 backdrop-blur md:left-[260px]"
 	>
-		<div class="flex w-1/3 min-w-0 items-center gap-4">
-			<div class="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[#2A3241] shadow-md">
-				<img
+		<!-- Mobile Progress Bar -->
+		<div class="absolute top-0 left-0 right-0 h-1 md:hidden bg-[#2A3241]">
+			<div class="h-full bg-[#FF6B4A]" style="width: {media.duration ? (media.currentTime / media.duration) * 100 : 0}%;"></div>
+			<input
+				type="range"
+				min="0"
+				max={media.duration || 100}
+				value={media.currentTime}
+				oninput={handleSeek}
+				class="absolute inset-0 w-full opacity-0 cursor-pointer"
+			/>
+		</div>
+
+		<!-- Left: Cover & Info -->
+		<div class="flex w-full md:w-1/3 min-w-0 items-center justify-between md:justify-start gap-4">
+			<div class="flex items-center gap-3 min-w-0 flex-1">
+				<div class="h-12 w-12 md:h-14 md:w-14 shrink-0 overflow-hidden rounded-lg bg-[#2A3241] shadow-md">
+					<img
 						src={media.currentTrack.thumbnailUrl || defaultMusicCover}
 						onerror={(e) => e.currentTarget.src = defaultMusicCover}
 						alt="Cover"
 						class="h-full w-full object-cover"
 					/>
+				</div>
+				<div class="flex min-w-0 flex-col">
+					<span class="truncate font-medium text-sm md:text-base text-white"
+						>{media.currentTrack.title || media.currentTrack.fileName}</span
+					>
+					<span class="truncate text-xs md:text-sm text-gray-400"
+						>{media.currentTrack.artist || 'Unknown Artist'}</span
+					>
+				</div>
 			</div>
-			<div class="flex min-w-0 flex-col">
-				<span class="truncate font-medium text-white"
-					>{media.currentTrack.title || media.currentTrack.fileName}</span
-				>
-				<span class="truncate text-sm text-gray-400"
-					>{media.currentTrack.artist || 'Unknown Artist'}</span
-				>
-			</div>
-			<button class="ml-2 text-gray-400 hover:text-white">
+			
+			<button class="hidden md:block ml-2 text-gray-400 hover:text-white">
 				<Heart size={18} />
 			</button>
+
+			<!-- Mobile Controls -->
+			<div class="flex md:hidden items-center gap-3 shrink-0">
+				<button class="text-gray-400 hover:text-white transition-colors" class:text-[#FF6B4A]={showLyrics} onclick={() => showLyrics = !showLyrics} title="Toggle Lyrics">
+					<Mic2 size={20} />
+				</button>
+				<button
+					class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
+					onclick={() => media.togglePlay()}
+				>
+					{#if media.isPaused}
+						<Play size={18} fill="currentColor" class="ml-0.5" />
+					{:else}
+						<Pause size={18} fill="currentColor" />
+					{/if}
+				</button>
+				<button class="text-gray-400 hover:text-white" onclick={() => media.playNext()}>
+					<SkipForward size={22} fill="currentColor" />
+				</button>
+			</div>
 		</div>
 
-		<!-- Center: Controls -->
-		<div class="flex max-w-lg flex-1 flex-col items-center gap-2">
+		<!-- Center: Controls (Desktop) -->
+		<div class="hidden md:flex max-w-lg flex-1 flex-col items-center gap-2">
 			<div class="flex items-center gap-6">
 				<button class="text-gray-400 hover:text-white"><Repeat size={18} /></button>
 				<button class="text-gray-400 hover:text-white" onclick={() => media.playPrev()}
@@ -350,8 +387,8 @@
 			</div>
 		</div>
 
-		<!-- Right: Volume & Extras -->
-		<div class="flex w-1/3 justify-end gap-4 pr-2">
+		<!-- Right: Volume & Extras (Desktop) -->
+		<div class="hidden md:flex w-1/3 justify-end gap-4 pr-2">
 			<button class="text-gray-400 hover:text-white transition-colors" class:text-[#FF6B4A]={showLyrics} onclick={() => showLyrics = !showLyrics} title="Toggle Lyrics">
 				<Mic2 size={18} />
 			</button>

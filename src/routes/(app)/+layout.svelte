@@ -10,7 +10,9 @@
 		Image,
 		FileText,
 		Settings,
-		LogOut
+		LogOut,
+		Menu,
+		X
 	} from 'lucide-svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -34,6 +36,13 @@
 	let { data, children } = $props();
 
 	let fileInput: HTMLInputElement;
+	let isMobileMenuOpen = $state(false);
+
+	$effect(() => {
+		// Close menu on route change
+		$page.url.pathname;
+		isMobileMenuOpen = false;
+	});
 
 	let storagePercentage = $derived(
 		data.user ? Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
@@ -51,15 +60,34 @@
 
 <Toaster theme="dark" position="top-right" offset="80px" />
 
-<div class="flex h-screen w-full overflow-hidden bg-[#0B0E14] text-white">
+<div class="relative flex h-screen w-full overflow-hidden bg-[#0B0E14] text-white">
+	<!-- Mobile Menu Overlay -->
+	{#if isMobileMenuOpen}
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+			onclick={() => (isMobileMenuOpen = false)}
+		></div>
+	{/if}
+
 	<!-- Sidebar -->
-	<aside class="flex h-full w-[260px] shrink-0 flex-col border-r border-[#2A3241] bg-[#151921]">
+	<aside
+		class="fixed inset-y-0 left-0 z-50 flex h-full w-[260px] shrink-0 flex-col border-r border-[#2A3241] bg-[#151921] transition-transform duration-300 ease-in-out md:relative md:translate-x-0 {isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}"
+	>
 		<!-- Brand -->
-		<div class="flex h-[64px] items-center border-b border-[#2A3241] px-6">
+		<div class="flex h-[64px] items-center justify-between border-b border-[#2A3241] px-6">
 			<div class="flex items-center gap-2 text-xl font-bold text-[#FF6B4A]">
 				<span>🍤</span>
 				<span class="text-white">Shrimp Drive</span>
 			</div>
+			<!-- Close button for mobile -->
+			<button
+				class="p-1 text-gray-400 transition-colors hover:text-white md:hidden"
+				onclick={() => (isMobileMenuOpen = false)}
+			>
+				<X size={20} />
+			</button>
 		</div>
 
 		<!-- Navigation -->
@@ -155,14 +183,22 @@
 	<main class="flex min-w-0 flex-1 flex-col overflow-hidden">
 		<!-- Header -->
 		<header
-			class="z-10 flex h-[64px] shrink-0 items-center justify-between border-b border-[#2A3241] bg-[#0B0E14]/80 px-6 backdrop-blur"
+			class="z-10 flex h-[64px] shrink-0 items-center justify-between border-b border-[#2A3241] bg-[#0B0E14]/80 px-4 backdrop-blur md:px-6"
 		>
-			<div class="flex flex-1 items-center gap-4">
-				<div class="relative w-96">
+			<div class="flex flex-1 items-center gap-3 md:gap-4">
+				<!-- Mobile Menu Toggle -->
+				<button
+					class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-[#2A3241] hover:text-white md:hidden"
+					onclick={() => (isMobileMenuOpen = true)}
+				>
+					<Menu size={20} />
+				</button>
+				
+				<div class="relative w-full max-w-[180px] sm:max-w-[240px] md:max-w-sm lg:w-96">
 					<Search size={18} class="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
 					<input
 						type="text"
-						placeholder="Search files, metadata..."
+						placeholder="Search..."
 						class="h-10 w-full rounded-full border border-[#2A3241] bg-[#151921] pr-4 pl-10 text-sm text-white placeholder-gray-500 focus:border-[#FF6B4A] focus:ring-1 focus:ring-[#FF6B4A] focus:outline-none"
 					/>
 				</div>
@@ -214,20 +250,20 @@
 				</div>
 			</div>
 
-			<div class="ml-auto flex items-center gap-4 pl-4">
+			<div class="ml-auto flex items-center gap-2 pl-2 md:gap-4 md:pl-4">
 				<input type="file" multiple id="global-file-upload" class="hidden" bind:this={fileInput} onchange={handleUpload} />
 				<button
 					onclick={() => fileInput.click()}
-					class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#FF8266]"
+					class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] p-2 text-sm font-medium text-white transition-colors hover:bg-[#FF8266] md:px-4"
 				>
 					<UploadCloud size={18} />
-					Upload File
+					<span class="hidden md:inline">Upload File</span>
 				</button>
 			</div>
 		</header>
 
 		<!-- Dynamic Canvas -->
-		<div class="flex-1 overflow-y-auto p-6">
+		<div class="flex-1 overflow-y-auto p-4 md:p-6">
 			{@render children()}
 		</div>
 	</main>

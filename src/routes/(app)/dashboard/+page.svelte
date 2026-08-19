@@ -212,25 +212,25 @@
 				<table class="w-full border-collapse text-left">
 					<thead>
 						<tr class="border-b border-[#2A3241] bg-[#0B0E14]">
-							<th class="p-4 text-xs font-medium tracking-wider text-gray-400 uppercase">Name</th>
-							<th class="p-4 text-xs font-medium tracking-wider text-gray-400 uppercase">Type</th>
-							<th class="p-4 text-right text-xs font-medium tracking-wider text-gray-400 uppercase tabular-nums">Size</th>
-							<th class="p-4 text-right text-xs font-medium tracking-wider text-gray-400 uppercase tabular-nums">Date</th>
-							<th class="p-4 text-center text-xs font-medium tracking-wider text-gray-400 uppercase">Actions</th>
+							<th class="whitespace-nowrap p-4 text-xs font-medium tracking-wider text-gray-400 uppercase">Name</th>
+							<th class="whitespace-nowrap p-4 text-xs font-medium tracking-wider text-gray-400 uppercase">Type</th>
+							<th class="whitespace-nowrap p-4 text-right text-xs font-medium tracking-wider text-gray-400 uppercase tabular-nums">Size</th>
+							<th class="whitespace-nowrap p-4 text-right text-xs font-medium tracking-wider text-gray-400 uppercase tabular-nums">Date</th>
+							<th class="whitespace-nowrap p-4 text-center text-xs font-medium tracking-wider text-gray-400 uppercase">Actions</th>
 						</tr>
 					</thead>
 					<tbody class="text-sm text-gray-300">
 						{#each filteredFiles as file}
 							{@const Icon = getFileIcon(file.fileType)}
 							<tr class="group border-b border-[#2A3241] transition-colors duration-150 hover:bg-[#1E2430] last:border-0">
-								<td class="flex items-center gap-3 p-4">
+								<td class="flex items-center gap-3 p-4 whitespace-nowrap">
 									<Icon class={getIconColor(file.fileType)} size={20} />
 									<span class="text-white truncate max-w-[200px] sm:max-w-[300px]" title={file.fileName}>{file.fileName}</span>
 								</td>
-								<td class="p-4 text-gray-400 capitalize">{file.fileType}</td>
-								<td class="p-4 text-right text-xs text-gray-400 tabular-nums">{formatBytes(file.fileSize)}</td>
-								<td class="p-4 text-right text-xs text-gray-400 tabular-nums">{formatDate(file.createdAt)}</td>
-								<td class="p-4 text-center">
+								<td class="p-4 text-gray-400 capitalize whitespace-nowrap">{file.fileType}</td>
+								<td class="p-4 text-right text-xs text-gray-400 tabular-nums whitespace-nowrap">{formatBytes(file.fileSize)}</td>
+								<td class="p-4 text-right text-xs text-gray-400 tabular-nums whitespace-nowrap">{formatDate(file.createdAt)}</td>
+								<td class="p-4 text-center whitespace-nowrap">
 									<div class="flex items-center justify-center gap-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
 										{#if file.fileType === 'audio'}
 											<button onclick={() => media.playTrack(0, [file])} class="text-[#FF6B4A] hover:text-[#FF8264]" title="Play"><Play size={18} /></button>

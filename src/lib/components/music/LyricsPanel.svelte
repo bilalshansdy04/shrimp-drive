@@ -212,7 +212,7 @@
 </script>
 
 <div class="flex h-full w-full flex-col overflow-hidden bg-[#0B0E14] p-6 text-white">
-	<div class="mb-6 shrink-0 flex items-center justify-between">
+	<div class="mb-6 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 		<div>
 			<h2 class="text-xl font-bold">Lyrics</h2>
 			{#if status === 'found'}
@@ -228,9 +228,9 @@
 		</div>
 		
 		{#if romajiLyricsList.length > 0 && romanizedType}
-			<div class="flex items-center rounded-lg bg-[#151921] p-1 border border-[#2A3241]">
+			<div class="flex w-full sm:w-auto items-center rounded-lg bg-[#151921] p-1 border border-[#2A3241]">
 				<button 
-					class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+					class="flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors"
 					class:bg-[#2A3241]={!isRomajiMode}
 					class:text-white={!isRomajiMode}
 					class:text-gray-400={isRomajiMode}
@@ -239,7 +239,7 @@
 					Original
 				</button>
 				<button 
-					class="px-3 py-1 text-xs font-medium rounded-md transition-colors"
+					class="flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors"
 					class:bg-[#2A3241]={isRomajiMode}
 					class:text-white={isRomajiMode}
 					class:text-gray-400={!isRomajiMode}

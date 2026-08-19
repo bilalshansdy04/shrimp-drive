@@ -222,7 +222,7 @@
 	{/if}
 
 	<!-- Header & Storage Stats -->
-	<div class="mb-8 flex items-center gap-6 rounded-2xl border border-[#2A3241] bg-[#151921] p-6">
+	<div class="mb-8 flex items-center gap-4 rounded-2xl border border-[#2A3241] bg-[#151921] p-4 md:gap-6 md:p-6">
 		<div class="relative flex h-16 w-16 shrink-0 items-center justify-center">
 			<svg class="h-full w-full -rotate-90 transform" viewBox="0 0 36 36">
 				<path
@@ -292,7 +292,7 @@
 	<!-- Empty State -->
 	{#if data.childFolders.length === 0 && data.recentFiles.length === 0}
 		<div
-			class="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-[#2A3241] p-12 text-center"
+			class="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-[#2A3241] p-6 text-center md:p-12"
 		>
 			<div class="mb-4 rounded-full bg-[#151921] p-4 text-gray-400">
 				<Folder size={48} />
