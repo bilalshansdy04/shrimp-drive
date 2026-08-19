@@ -311,9 +311,9 @@
 					<div
 						class="group hover:border-primary-container relative flex items-center gap-3 rounded-xl border border-[#2A3241] bg-[#151921] p-4 transition-all hover:bg-[#1A202A]"
 					>
-						<a href={`/drive?folder=${folder.id}`} class="absolute inset-0 z-0"></a>
-						<Folder size={24} class="z-10 shrink-0 text-blue-500" />
-						<div class="z-10 min-w-0 flex-1">
+						<a href={`/drive?folder=${folder.id}`} class="absolute inset-0 z-10" aria-label={`Open folder ${folder.name}`}></a>
+						<Folder size={24} class="shrink-0 text-blue-500" />
+						<div class="min-w-0 flex-1">
 							<p class="truncate font-medium text-white" title={folder.name}>{folder.name}</p>
 							<p class="text-xs text-gray-500 capitalize">{folder.category}</p>
 						</div>
@@ -376,6 +376,15 @@
 					<div
 						class="group hover:border-primary-container relative flex items-center justify-between rounded-xl border border-[#2A3241] bg-[#151921] p-4 transition-all hover:bg-[#1A202A]"
 					>
+						{#if file.fileType === 'audio'}
+							<button onclick={() => media.playTrack(0, [file])} class="absolute inset-0 z-10" aria-label={`Play ${file.fileName}`}></button>
+						{:else if file.fileType === 'video'}
+							<a href={`/video/${file.id}`} class="absolute inset-0 z-10" aria-label={`View ${file.fileName}`}></a>
+						{:else if file.fileType === 'photo' || file.fileType === 'image'}
+							<a href={`/photo?view=${file.id}`} class="absolute inset-0 z-10" aria-label={`View ${file.fileName}`}></a>
+						{:else}
+							<a href={`/api/files/${file.id}/download`} target="_blank" class="absolute inset-0 z-10" aria-label={`Download ${file.fileName}`}></a>
+						{/if}
 						<div class="flex min-w-0 flex-1 items-center gap-4">
 							<div
 								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-800"
@@ -395,32 +404,15 @@
 						</div>
 
 						<div class="flex shrink-0 items-center gap-2">
-							<!-- Direct file actions -->
+							<!-- Direct file actions (visual only, handled by absolute overlay) -->
 							{#if file.fileType === 'audio'}
-								<button
-									onclick={() => media.playTrack(0, [file])}
-									class="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white"
-									><Play size={18} /></button
-								>
+								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white"><Play size={18} /></div>
 							{:else if file.fileType === 'video'}
-								<a
-									href={`/video/${file.id}`}
-									class="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white"
-									><Play size={18} /></a
-								>
+								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white"><Play size={18} /></div>
 							{:else if file.fileType === 'photo' || file.fileType === 'image'}
-								<a
-									href={`/photo?view=${file.id}`}
-									class="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white"
-									><Eye size={18} /></a
-								>
+								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white"><Eye size={18} /></div>
 							{:else}
-								<a
-									href={`/api/files/${file.id}/download`}
-									target="_blank"
-									class="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white"
-									><Eye size={18} /></a
-								>
+								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white"><Eye size={18} /></div>
 							{/if}
 
 							<!-- File Menu -->
