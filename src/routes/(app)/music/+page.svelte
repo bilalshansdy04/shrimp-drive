@@ -177,8 +177,12 @@
 		</div>
 		
 		<div class="flex items-center gap-2">
-			<button class="md:hidden flex items-center justify-center rounded-lg border border-[#2A3241] bg-[#151921] p-2 text-gray-400 transition-colors hover:bg-[#1E2430] hover:text-white" onclick={() => selectionMode = !selectionMode} title="Select Items" class:bg-[#FF6B4A]={selectionMode} class:text-black={selectionMode} class:border-[#FF6B4A]={selectionMode}>
-				<Check size={18} />
+			<button
+				onclick={toggleSelectionMode}
+				class="flex items-center gap-2 rounded-lg border {selectionMode ? 'border-[#FF6B4A] bg-[#FF6B4A]/10 text-[#FF6B4A]' : 'border-[#2A3241] bg-[#151921] text-gray-400 hover:bg-[#1E2430] hover:text-white'} px-3 py-2 text-sm font-medium transition-colors"
+				title={selectionMode ? 'Cancel Selection' : 'Select Items'}
+			>
+				<Check size={16} /> <span class="hidden sm:inline">{selectionMode ? 'Cancel' : 'Select'}</span>
 			</button>
 			<div class="relative">
 				<button
@@ -586,7 +590,7 @@
 							}}
 						>
 							{#if selectionMode}
-								<div class="absolute top-2 right-2 z-20 h-5 w-5 rounded-full border flex items-center justify-center bg-black/50 {selectedIds.includes(track.id) ? 'bg-[#FF6B4A] border-[#FF6B4A]' : 'border-white'}">
+								<div class="absolute top-2 right-2 z-20 h-5 w-5 rounded-full border flex items-center justify-center {selectedIds.includes(track.id) ? 'bg-[#FF6B4A] border-[#FF6B4A]' : 'bg-black/50 border-white'}">
 									{#if selectedIds.includes(track.id)}
 										<Check size={14} class="text-black" />
 									{/if}
