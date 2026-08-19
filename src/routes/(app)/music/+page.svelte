@@ -71,11 +71,38 @@
 
 	function longpress(node: HTMLElement, { duration, callback }: { duration: number, callback: () => void }) {
 		let timer: ReturnType<typeof setTimeout>;
+		let startX = 0;
+		let startY = 0;
 		
-		const handleMousedown = () => {
+		const handleMousedown = (e: MouseEvent | TouchEvent) => {
+			if (e instanceof TouchEvent) {
+				startX = e.touches[0].clientX;
+				startY = e.touches[0].clientY;
+			} else {
+				startX = e.clientX;
+				startY = e.clientY;
+			}
 			timer = setTimeout(() => {
 				callback();
 			}, duration);
+		};
+
+		const handleMousemove = (e: MouseEvent | TouchEvent) => {
+			let currentX = 0;
+			let currentY = 0;
+			if (e instanceof TouchEvent) {
+				currentX = e.touches[0].clientX;
+				currentY = e.touches[0].clientY;
+			} else {
+				currentX = e.clientX;
+				currentY = e.clientY;
+			}
+			const diffX = Math.abs(currentX - startX);
+			const diffY = Math.abs(currentY - startY);
+			
+			if (diffX > 10 || diffY > 10) {
+				clearTimeout(timer);
+			}
 		};
 		
 		const handleMouseup = () => {
@@ -83,16 +110,20 @@
 		};
 
 		node.addEventListener('mousedown', handleMousedown);
+		node.addEventListener('mousemove', handleMousemove);
 		node.addEventListener('mouseup', handleMouseup);
-		node.addEventListener('touchstart', handleMousedown);
+		node.addEventListener('touchstart', handleMousedown, { passive: true });
+		node.addEventListener('touchmove', handleMousemove, { passive: true });
 		node.addEventListener('touchend', handleMouseup);
 		node.addEventListener('touchcancel', handleMouseup);
 		
 		return {
 			destroy() {
 				node.removeEventListener('mousedown', handleMousedown);
+				node.removeEventListener('mousemove', handleMousemove);
 				node.removeEventListener('mouseup', handleMouseup);
 				node.removeEventListener('touchstart', handleMousedown);
+				node.removeEventListener('touchmove', handleMousemove);
 				node.removeEventListener('touchend', handleMouseup);
 				node.removeEventListener('touchcancel', handleMouseup);
 			}
@@ -478,7 +509,7 @@
 								<tr
 									class="group cursor-pointer transition-colors hover:bg-[#1E2430] {selectionMode && selectedIds.includes(track.id) ? 'bg-[#FF6B4A]/10' : ''}"
 									use:longpress={{
-										duration: 500,
+										duration: 400,
 										callback: () => {
 											if (!selectionMode) {
 												selectionMode = true;
@@ -573,7 +604,7 @@
 						<div
 							class="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#2A3241] bg-[#10131a] transition-colors hover:border-[#FF6B4A] {selectionMode && selectedIds.includes(track.id) ? 'border-[#FF6B4A] ring-2 ring-[#FF6B4A]' : ''}"
 							use:longpress={{
-								duration: 500,
+								duration: 400,
 								callback: () => {
 									if (!selectionMode) {
 										selectionMode = true;
