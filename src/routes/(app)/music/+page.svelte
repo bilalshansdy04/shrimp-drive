@@ -176,9 +176,8 @@
 			<p class="text-sm text-gray-400">{audioFiles.length} tracks • {formatBytes(totalSize)}</p>
 		</div>
 		
-		{#if !selectionMode}
 		<div class="flex items-center gap-2">
-			<button class="md:hidden flex items-center justify-center rounded-lg border border-[#2A3241] bg-[#151921] p-2 text-gray-400 transition-colors hover:bg-[#1E2430] hover:text-white" onclick={() => selectionMode = true} title="Select Items">
+			<button class="md:hidden flex items-center justify-center rounded-lg border border-[#2A3241] bg-[#151921] p-2 text-gray-400 transition-colors hover:bg-[#1E2430] hover:text-white" onclick={() => selectionMode = !selectionMode} title="Select Items" class:bg-[#FF6B4A]={selectionMode} class:text-black={selectionMode} class:border-[#FF6B4A]={selectionMode}>
 				<Check size={18} />
 			</button>
 			<div class="relative">
@@ -190,7 +189,6 @@
 					title="Sort By"
 				>
 					<Filter size={16} />
-					<!-- <span class="hidden capitalize sm:inline">SORT BY</span> -->
 				</button>
 
 				{#if showSortMenu}
@@ -288,20 +286,6 @@
 				{/if}
 			</button>
 		</div>
-		{:else}
-		<div class="flex flex-1 items-center justify-between rounded-lg border border-[#FF6B4A] bg-[#FF6B4A]/10 px-4 py-2 ml-4">
-			<div class="flex items-center gap-3 text-[#FF6B4A]">
-				<button onclick={toggleSelectionMode}><X size={20} /></button>
-				<span class="font-medium text-sm sm:text-base">{selectedIds.length} Selected</span>
-			</div>
-			<div class="flex items-center gap-3">
-				<button onclick={() => selectedIds = audioFiles.map(f => f.id)} class="text-sm font-medium text-[#FF6B4A] hover:underline">Select All</button>
-				<button onclick={downloadSelected} class="flex items-center gap-1 rounded bg-[#FF6B4A] px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50" disabled={selectedIds.length === 0}>
-					<Download size={16} /> <span class="hidden sm:inline">Download</span>
-				</button>
-			</div>
-		</div>
-		{/if}
 	</div>
 
 	{#if showLyrics}
@@ -412,13 +396,28 @@
 
 		<div class="overflow-hidden rounded-2xl border border-[#2A3241] bg-[#151921] shadow-lg">
 			<div class="flex items-center justify-between border-b border-[#2A3241] p-4">
-				<button
-					onclick={() => media.playTrack(0, audioFiles)}
-					class="bg-primary-container flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-black transition-transform hover:scale-105"
-				>
-					<Play size={18} fill="currentColor" /> Play All
-				</button>
-				<span class="text-xs text-gray-400">{audioFiles.length} items</span>
+				{#if selectionMode && viewMode === 'grid'}
+					<div class="flex flex-1 items-center justify-between">
+						<div class="flex items-center gap-3 text-[#FF6B4A]">
+							<button onclick={toggleSelectionMode}><X size={20} /></button>
+							<span class="font-medium text-sm sm:text-base">{selectedIds.length} Selected</span>
+						</div>
+						<div class="flex items-center gap-3">
+							<button onclick={() => selectedIds = audioFiles.map(f => f.id)} class="text-sm font-medium text-[#FF6B4A] hover:underline">Select All</button>
+							<button onclick={downloadSelected} class="flex items-center gap-1 rounded bg-[#FF6B4A] px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50" disabled={selectedIds.length === 0}>
+								<Download size={16} /> <span class="hidden sm:inline">Download</span>
+							</button>
+						</div>
+					</div>
+				{:else}
+					<button
+						onclick={() => media.playTrack(0, audioFiles)}
+						class="bg-primary-container flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-black transition-transform hover:scale-105"
+					>
+						<Play size={18} fill="currentColor" /> Play All
+					</button>
+					<span class="text-xs text-gray-400">{audioFiles.length} items</span>
+				{/if}
 			</div>
 			{#if audioFiles.length === 0}
 				<div class="flex flex-col items-center justify-center p-12 text-center text-gray-400">
@@ -429,23 +428,45 @@
 				<div class="w-full">
 					<table class="w-full border-collapse text-left table-fixed">
 						<thead>
-							<tr class="border-b border-[#2A3241] bg-[#10131a]">
-								<th class="w-10 sm:w-12 px-2 sm:px-4 py-3 text-center text-xs font-medium text-gray-400">#</th>
-								<th class="px-2 sm:px-4 py-3 text-xs font-medium text-gray-400">Name</th>
-								<th class="hidden px-4 py-3 text-xs font-medium text-gray-400 sm:table-cell"
-									>Artist</th
-								>
-								<th class="hidden w-24 px-4 py-3 text-right text-xs font-medium text-gray-400 sm:table-cell">Duration</th
-								>
-								<th
-									class="hidden w-28 px-4 py-3 text-right text-xs font-medium text-gray-400 md:table-cell"
-									>Bitrate</th
-								>
-								<th
-									class="hidden w-32 px-4 py-3 text-right text-xs font-medium text-gray-400 lg:table-cell"
-									>Added</th
-								>
-								<th class="w-12 sm:w-16 px-2 py-3 text-center"></th>
+							<tr class="border-b {selectionMode ? 'border-[#FF6B4A] bg-[#FF6B4A]/10' : 'border-[#2A3241] bg-[#10131a]'}">
+								<th class="w-10 sm:w-12 px-2 sm:px-4 py-3 text-center text-xs font-medium {selectionMode ? 'text-[#FF6B4A]' : 'text-gray-400'}">
+									{#if selectionMode}
+										<button onclick={toggleSelectionMode}><X size={20} class="mx-auto" /></button>
+									{:else}
+										#
+									{/if}
+								</th>
+								<th class="px-2 sm:px-4 py-3 text-xs font-medium text-gray-400">
+									{#if selectionMode}
+										<div class="flex flex-1 items-center justify-start text-[#FF6B4A]">
+											<div class="flex items-center gap-3 sm:gap-4">
+												<span class="font-medium text-sm sm:text-base">{selectedIds.length} Selected</span>
+												<button onclick={() => selectedIds = audioFiles.map(f => f.id)} class="text-sm font-medium hover:underline">Select All</button>
+											</div>
+										</div>
+									{:else}
+										Name
+									{/if}
+								</th>
+								<th class="hidden px-4 py-3 text-xs font-medium text-gray-400 sm:table-cell">
+									{#if !selectionMode}Artist{/if}
+								</th>
+								<th class="hidden w-24 px-4 py-3 text-right text-xs font-medium text-gray-400 sm:table-cell">
+									{#if !selectionMode}Duration{/if}
+								</th>
+								<th class="hidden w-28 px-4 py-3 text-right text-xs font-medium text-gray-400 md:table-cell">
+									{#if !selectionMode}Bitrate{/if}
+								</th>
+								<th class="hidden w-32 px-4 py-3 text-right text-xs font-medium text-gray-400 lg:table-cell">
+									{#if !selectionMode}Added{/if}
+								</th>
+								<th class="w-12 sm:w-16 px-2 py-3 text-center">
+									{#if selectionMode}
+										<button onclick={downloadSelected} class="mx-auto flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded bg-[#FF6B4A] text-black transition-opacity hover:opacity-90 disabled:opacity-50" disabled={selectedIds.length === 0} title="Download Selected">
+											<Download size={16} />
+										</button>
+									{/if}
+								</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-[#2A3241]/50 text-sm text-white">
