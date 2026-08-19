@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
+import { generateRandomKey } from '$lib/server/crypto';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	return {
@@ -67,5 +68,31 @@ export const actions: Actions = {
 		await db.update(users).set({ passwordHash }).where(eq(users.id, locals.user.id));
 
 		return { success: 'Password updated successfully.' };
+	},
+
+	toggleFlexibleEncryption: async ({ request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'Unauthorized' });
+
+		if (locals.user.encryptionMode !== 'flexible') {
+			return fail(400, { error: 'You are not in flexible mode.' });
+		}
+
+		const data = await request.formData();
+		const action = data.get('action') as string;
+
+		const isActive = action === 'on';
+
+		let key = locals.user.encryptionKey;
+		if (isActive && !key) {
+			key = generateRandomKey();
+		}
+
+		await db.update(users).set({ 
+			isEncryptionActive: isActive,
+			...(key ? { encryptionKey: key } : {})
+		}).where(eq(users.id, locals.user.id));
+
+		return { success: isActive ? 'Encryption enabled for future uploads.' : 'Encryption disabled for future uploads.' };
 	}
 };
+

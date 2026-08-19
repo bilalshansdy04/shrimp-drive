@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { users, invitationCodes } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { generateRandomKey } from '$lib/server/crypto';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
@@ -18,6 +19,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let finalEncryptionMode = 'flexible';
 		let finalStorageLimit = 8589934592; // 8GB default
 		let inviteType = 'regular_self_setup';
+		let finalEncryptionKey = generateRandomKey();
+		let inviteCodeRecord: any = null;
 
 		if (code) {
 			// Verify Invitation Code
@@ -26,21 +29,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				return json({ error: 'Invalid Invitation Code.' }, { status: 400 });
 			}
 
-			const inviteCode = codeResult[0];
-			if (inviteCode.isUsed) {
+			inviteCodeRecord = codeResult[0];
+			if (inviteCodeRecord.isUsed) {
 				return json({ error: 'Invitation Code has already been used.' }, { status: 400 });
 			}
 
-			finalEncryptionMode = inviteCode.encryptionMode;
-			finalStorageLimit = inviteCode.storageLimit;
-			inviteType = inviteCode.type;
+			finalEncryptionMode = inviteCodeRecord.encryptionMode;
+			finalStorageLimit = inviteCodeRecord.storageLimit;
+			inviteType = inviteCodeRecord.type;
+			if (inviteCodeRecord.encryptionKey) {
+				finalEncryptionKey = inviteCodeRecord.encryptionKey;
+			}
 
-			if (inviteCode.type === 'friend_zero_setup') {
-				if (!inviteCode.assignedBotToken || !inviteCode.assignedChatId) {
+			if (inviteCodeRecord.type === 'friend_zero_setup') {
+				if (!inviteCodeRecord.assignedBotToken || !inviteCodeRecord.assignedChatId) {
 					return json({ error: 'Invitation Code is invalid. Missing admin bot token.' }, { status: 400 });
 				}
-				finalBotToken = inviteCode.assignedBotToken;
-				finalChatId = inviteCode.assignedChatId;
+				finalBotToken = inviteCodeRecord.assignedBotToken;
+				finalChatId = inviteCodeRecord.assignedChatId;
 			}
 		}
 
@@ -68,14 +74,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			telegramBotToken: finalBotToken,
 			telegramChatId: finalChatId,
 			encryptionMode: finalEncryptionMode,
+			encryptionKey: finalEncryptionKey,
 			storageLimit: finalStorageLimit
 		}).where(eq(users.id, locals.user.id));
 
-		if (code) {
+		if (code && inviteCodeRecord) {
 			// Mark code as used
+			const newUsedCount = inviteCodeRecord.usedCount + 1;
+			const isFullyUsed = newUsedCount >= inviteCodeRecord.maxUses ? 1 : 0;
+			
 			await db.update(invitationCodes).set({
-				isUsed: 1,
-				usedBy: locals.user.id
+				isUsed: isFullyUsed,
+				usedBy: locals.user.id,
+				usedCount: newUsedCount
 			}).where(eq(invitationCodes.code, code));
 		}
 

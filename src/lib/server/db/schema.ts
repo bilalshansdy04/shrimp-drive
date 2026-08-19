@@ -12,6 +12,8 @@ export const users = sqliteTable("users", {
   telegramBotToken: text("telegram_bot_token"),
   telegramChatId: text("telegram_chat_id"),
   encryptionMode: text("encryption_mode"), // 'locked_on' | 'locked_off' | 'flexible'
+  encryptionKey: text("encryption_key"),
+  isEncryptionActive: integer("is_encryption_active", { mode: "boolean" }).default(false).notNull(),
   storageUsed: integer("storage_used").default(0).notNull(), // in Bytes
   storageLimit: integer("storage_limit").default(8589934592).notNull(), // Default 8 GB in Bytes
   isSuspended: integer("is_suspended", { mode: "boolean" }).default(false).notNull(),
@@ -48,6 +50,7 @@ export const files = sqliteTable("files", {
   mimeType: text("mime_type").notNull(),
   fileSize: integer("file_size").notNull(), // in Bytes
   telegramFileId: text("telegram_file_id").notNull(),
+  isEncrypted: integer("is_encrypted", { mode: "boolean" }).default(false).notNull(),
 
   // Media Specific Metadata (Nullable)
   title: text("title"),
@@ -106,6 +109,7 @@ export const invitationCodes = sqliteTable("invitation_codes", {
   assignedBotToken: text("assigned_bot_token"),
   assignedChatId: text("assigned_chat_id"),
   encryptionMode: text("encryption_mode").notNull(), // 'locked_on' | 'locked_off' | 'flexible'
+  encryptionKey: text("encryption_key"),
   storageLimit: integer("storage_limit").notNull(),
   type: text("type").notNull(), // 'friend_zero_setup' | 'regular_self_setup'
   isUsed: integer("is_used").default(0).notNull(), // 0 or 1

@@ -5,6 +5,7 @@ import { invitationCodes } from '$lib/server/db/schema';
 import { desc } from 'drizzle-orm';
 import crypto from 'crypto';
 import type { RequestHandler } from './$types';
+import { generateRandomKey } from '$lib/server/crypto';
 
 export const GET: RequestHandler = async ({ request }) => {
 	requireAdminAuth(request);
@@ -20,6 +21,7 @@ export const GET: RequestHandler = async ({ request }) => {
 			maxUses: invitationCodes.maxUses,
 			isRevoked: invitationCodes.isRevoked,
 			assignedChatId: invitationCodes.assignedChatId, // frontend can censor this if needed
+			encryptionKey: invitationCodes.encryptionKey,
 			createdAt: invitationCodes.createdAt
 		})
 		.from(invitationCodes)
@@ -48,6 +50,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		code: finalCode,
 		type,
 		encryptionMode,
+		encryptionKey: generateRandomKey(),
 		storageLimit,
 		maxUses,
 		assignedBotToken,

@@ -162,10 +162,75 @@
 					{:else if data.user.encryptionMode === 'locked_off'}
 						Encryption is permanently disabled by your administrator. Files are stored as-is. This mode cannot be changed.
 					{:else}
-						You are in flexible mode. You can choose whether to encrypt files on upload in your storage dashboard.
+						You are in flexible mode. You can choose whether to encrypt files on upload. Turning this on will secure all your future uploads using AES-256-CTR before reaching Telegram.
 					{/if}
 				</p>
+				
+				{#if data.user.encryptionMode === 'flexible'}
+					<div class="mt-4 flex items-center justify-between rounded-lg border border-[#2A3241] bg-[#151921] p-4">
+						<div>
+							<h3 class="text-sm font-bold text-white">Toggle Encryption</h3>
+							<p class="text-xs text-gray-400">Currently: {data.user.isEncryptionActive ? 'Active (Encrypting)' : 'Inactive (Not Encrypting)'}</p>
+						</div>
+						<form
+							method="POST"
+							action="?/toggleFlexibleEncryption"
+							use:enhance={() => {
+								isLoading = true;
+								return async ({ update }) => {
+									await update();
+									isLoading = false;
+								};
+							}}
+						>
+							<input type="hidden" name="action" value={data.user.isEncryptionActive ? 'off' : 'on'} />
+							<button
+								type="submit"
+								disabled={isLoading}
+								class="rounded-lg px-4 py-2 text-sm font-bold transition-colors disabled:opacity-50 {data.user.isEncryptionActive ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'}"
+							>
+								{isLoading ? 'Wait...' : (data.user.isEncryptionActive ? 'Turn Off' : 'Turn On')}
+							</button>
+						</form>
+					</div>
+				{/if}
+
+				{#if data.user.encryptionKey}
+					<div class="mt-4 rounded-lg bg-[#151921] p-4 border border-[#2A3241]">
+						<h3 class="mb-2 text-sm font-bold text-white">Your Permanent Encryption Key</h3>
+						<p class="mb-3 text-xs text-gray-400">
+							This is your unique 256-bit AES cryptographic key. Please save it in a secure location (e.g., a password manager). 
+							If you ever lose access to this platform, you will need this key to decrypt your files manually.
+						</p>
+						<div class="flex items-center gap-2">
+							<input
+								type="text"
+								readonly
+								value={data.user.encryptionKey}
+								class="w-full rounded-md bg-[#0F1219] p-2 text-xs font-mono text-gray-300 border border-[#2A3241] focus:outline-none"
+								on:focus={(e) => e.currentTarget.select()}
+							/>
+							<button
+								type="button"
+								class="rounded-md bg-blue-500/10 p-2 text-blue-500 transition-colors hover:bg-blue-500/20"
+								on:click={() => {
+									if (data.user?.encryptionKey) {
+										navigator.clipboard.writeText(data.user.encryptionKey);
+										alert('Encryption key copied to clipboard!');
+									}
+								}}
+								title="Copy to clipboard"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+									<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+								</svg>
+							</button>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</section>
 	</div>
 </div>
+

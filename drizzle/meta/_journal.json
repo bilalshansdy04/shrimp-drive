@@ -15,6 +15,13 @@
       "when": 1787039318789,
       "tag": "0001_fantastic_spiral",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787143469020,
+      "tag": "0002_wonderful_blue_shield",
+      "breakpoints": true
     }
   ]
 }

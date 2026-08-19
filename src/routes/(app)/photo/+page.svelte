@@ -13,6 +13,7 @@
 	import { page } from '$app/stores';
 	import { pushState, replaceState } from '$app/navigation';
 	import type { PageData } from './$types';
+	import { toast } from 'svelte-sonner';
 
 	const { data }: { data: PageData } = $props();
 	const photoFiles = $derived(data.photoFiles);
@@ -296,6 +297,13 @@
 							loading="lazy"
 							decoding="async"
 							class="h-auto w-full object-cover transition-transform duration-500 group-hover:scale-105"
+							onerror={(e) => {
+								if (photo.isEncrypted) {
+									toast.error('File video rusak atau kunci dekripsi tidak cocok. Disarankan hapus file dan upload ulang');
+								}
+								// Hide broken image icon
+								(e.currentTarget as HTMLImageElement).style.display = 'none';
+							}}
 						/>
 
 						<!-- Hover Overlay / Action -->
@@ -530,6 +538,13 @@
 				src={`/api/files/${selectedPhoto.id}/download`}
 				alt={selectedPhoto.fileName}
 				onload={() => (highResLoaded = true)}
+				onerror={(e) => {
+					if (selectedPhoto.isEncrypted) {
+						toast.error('File rusak atau kunci dekripsi tidak cocok');
+					}
+					// Show broken image state
+					(e.currentTarget as HTMLImageElement).style.display = 'none';
+				}}
 				class="relative z-10 max-h-[90vh] max-w-full object-contain transition-opacity duration-500"
 				class:opacity-0={!highResLoaded && selectedPhoto.thumbnailUrl}
 				class:opacity-100={highResLoaded || !selectedPhoto.thumbnailUrl}

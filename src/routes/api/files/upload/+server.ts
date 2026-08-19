@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { uploadFileToTelegram } from '$lib/server/telegram';
 import { parseBuffer } from 'music-metadata';
 import crypto from 'crypto';
+import { encryptBuffer } from '$lib/server/crypto';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB soft limit
 
@@ -136,41 +137,60 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
+		let fileId: string = crypto.randomUUID();
+		const { and, eq } = await import('drizzle-orm');
+		let existingFile: any = null;
+
+		if (conflictAction === 'replace' && replaceFileId) {
+			existingFile = await db.query.files.findFirst({
+				where: and(eq(files.id, replaceFileId), eq(files.userId, locals.user.id))
+			});
+			if (existingFile) {
+				fileId = existingFile.id;
+			}
+		}
+
+		let uploadData: File | Blob = file;
+		let isEncrypted = false;
+
+		if (locals.user.encryptionMode === 'locked_on' || (locals.user.encryptionMode === 'flexible' && locals.user.isEncryptionActive)) {
+			if (!locals.user.encryptionKey) {
+				return json({ error: 'Encryption key not found.' }, { status: 400 });
+			}
+			const buffer = Buffer.from(await file.arrayBuffer());
+			const encryptedBuffer = encryptBuffer(buffer, locals.user.encryptionKey, fileId);
+			uploadData = new Blob([encryptedBuffer as unknown as BlobPart], { type: file.type || 'application/octet-stream' });
+			isEncrypted = true;
+		}
+
+		const tgFileName = isEncrypted ? `${crypto.randomUUID().replace(/-/g, '')}.txt` : finalFileName;
+
 		// Upload to Telegram
 		const tgResult = await uploadFileToTelegram(
 			locals.user.telegramBotToken,
 			locals.user.telegramChatId,
-			file,
-			finalFileName
+			uploadData,
+			tgFileName
 		);
 
-		let fileId: string = crypto.randomUUID();
+		if (conflictAction === 'replace' && replaceFileId && existingFile) {
+			await db.update(files).set({
+				fileType: fileType,
+				mimeType: file.type || 'application/octet-stream',
+				fileSize: file.size,
+				telegramFileId: tgResult.telegramFileId,
+				title: metadata.title,
+				artist: metadata.artist,
+				album: metadata.album,
+				duration: metadata.duration ? Math.round(metadata.duration) : null,
+				thumbnailUrl: metadata.thumbnailUrl || null,
+				isEncrypted
+			}).where(eq(files.id, fileId));
 
-		if (conflictAction === 'replace' && replaceFileId) {
-			const { and, eq } = await import('drizzle-orm');
-			const existingFile = await db.query.files.findFirst({
-				where: and(eq(files.id, replaceFileId), eq(files.userId, locals.user.id))
-			});
-
-			if (existingFile) {
-				fileId = existingFile.id;
-				await db.update(files).set({
-					fileType: fileType,
-					mimeType: file.type || 'application/octet-stream',
-					fileSize: file.size,
-					telegramFileId: tgResult.telegramFileId,
-					title: metadata.title,
-					artist: metadata.artist,
-					album: metadata.album,
-					duration: metadata.duration ? Math.round(metadata.duration) : null,
-					thumbnailUrl: metadata.thumbnailUrl || null
-				}).where(eq(files.id, fileId));
-
-				const sizeDiff = file.size - existingFile.fileSize;
-				await db.update(users).set({ storageUsed: locals.user.storageUsed + sizeDiff }).where(eq(users.id, locals.user.id));
-				
-				return json({ success: true, fileId });
-			}
+			const sizeDiff = file.size - existingFile.fileSize;
+			await db.update(users).set({ storageUsed: locals.user.storageUsed + sizeDiff }).where(eq(users.id, locals.user.id));
+			
+			return json({ success: true, fileId });
 		}
 
 		await db.insert(files).values({
@@ -186,7 +206,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			artist: metadata.artist,
 			album: metadata.album,
 			duration: metadata.duration ? Math.round(metadata.duration) : null,
-			thumbnailUrl: metadata.thumbnailUrl || null
+			thumbnailUrl: metadata.thumbnailUrl || null,
+			isEncrypted
 		});
 
 		const newStorageUsed = locals.user.storageUsed + file.size;
