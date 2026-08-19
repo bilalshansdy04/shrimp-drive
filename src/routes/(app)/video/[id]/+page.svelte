@@ -4,15 +4,20 @@
 	import { media } from '$lib/client/mediaState.svelte';
 	import { onMount } from 'svelte';
 
-	const { data }: { data: PageData } = $props();
-	const { videoFile } = data;
+	let { data }: { data: PageData } = $props();
+	let videoFile = $derived(data.videoFile);
 
 	let videoElement: HTMLVideoElement | undefined = $state();
 	let containerElement: HTMLDivElement | undefined = $state();
 	let isBuffering = $state(true);
 
+	let currentTime = $state(0);
+	let duration = $state(0);
+	let isPaused = $state(false); // Autoplay is true, so initially not paused? Wait, video starts playing if possible.
+	let volume = $state(1);
+
 	let displayDuration = $derived(
-		media.duration && !isNaN(media.duration) ? media.duration : videoFile.duration
+		duration && !isNaN(duration) ? duration : videoFile.duration
 	);
 
 	function formatTime(seconds: number | null) {
@@ -23,20 +28,20 @@
 	}
 
 	onMount(() => {
-		// Set this video as the current track in the global media state
-		if (media.currentTrack?.id !== videoFile.id) {
-			media.playTrack(0, [videoFile]);
+		// Pause any globally playing music when opening a video
+		if (!media.isPaused) {
+			media.isPaused = true;
 		}
 	});
 
 	function handleSeek(e: Event) {
 		const target = e.target as HTMLInputElement;
-		media.currentTime = Number(target.value);
+		currentTime = Number(target.value);
 	}
 
 	function handleVolume(e: Event) {
 		const target = e.target as HTMLInputElement;
-		media.volume = Number(target.value);
+		volume = Number(target.value);
 	}
 
 	function toggleFullscreen() {
@@ -58,7 +63,7 @@
 		<a
 			href="/video"
 			class="rounded-full bg-black/40 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/60"
-			onclick={() => { media.isPaused = true; }}
+			onclick={() => { isPaused = true; }}
 		>
 			<ArrowLeft size={20} />
 		</a>
@@ -76,14 +81,14 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<video
 			bind:this={videoElement}
-			bind:currentTime={media.currentTime}
-			bind:duration={media.duration}
-			bind:paused={media.isPaused}
-			bind:volume={media.volume}
+			bind:currentTime={currentTime}
+			bind:duration={duration}
+			bind:paused={isPaused}
+			bind:volume={volume}
 			src={`/api/files/${videoFile.id}/download`}
 			class="h-full w-full object-contain"
 			autoplay
-			onclick={() => media.togglePlay()}
+			onclick={() => isPaused = !isPaused}
 			onwaiting={() => isBuffering = true}
 			onplaying={() => isBuffering = false}
 			oncanplay={() => isBuffering = false}
@@ -103,15 +108,15 @@
 		>
 			<!-- Progress Bar -->
 			<div class="mb-4 flex items-center gap-3">
-				<span class="w-12 font-mono text-sm text-white text-right">{formatTime(media.currentTime)}</span>
+				<span class="w-12 font-mono text-sm text-white text-right">{formatTime(currentTime)}</span>
 				<input
 					type="range"
 					min="0"
 					max={displayDuration || 100}
-					value={media.currentTime}
+					value={currentTime}
 					oninput={handleSeek}
 					style="background-size: {displayDuration
-						? (media.currentTime / displayDuration) * 100
+						? (currentTime / displayDuration) * 100
 						: 0}% 100%;"
 					class="from-primary-container to-primary-container accent-primary-container h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-white/20 bg-gradient-to-r bg-no-repeat"
 				/>
@@ -123,9 +128,9 @@
 				<div class="flex items-center gap-6">
 					<button
 						class="hover:text-primary-container text-white transition-colors"
-						onclick={() => media.togglePlay()}
+						onclick={() => isPaused = !isPaused}
 					>
-						{#if media.isPaused}
+						{#if isPaused}
 							<Play size={28} fill="currentColor" />
 						{:else}
 							<Pause size={28} fill="currentColor" />
@@ -135,7 +140,7 @@
 					<div class="group/vol flex items-center gap-2">
 						<button
 							class="hover:text-primary-container text-white transition-colors"
-							onclick={() => (media.volume = media.volume === 0 ? 1 : 0)}
+							onclick={() => (volume = volume === 0 ? 1 : 0)}
 						>
 							<Volume2 size={24} />
 						</button>
@@ -144,9 +149,9 @@
 							min="0"
 							max="1"
 							step="0.01"
-							value={media.volume}
+							value={volume}
 							oninput={handleVolume}
-							style="background-size: {media.volume * 100}% 100%;"
+							style="background-size: {volume * 100}% 100%;"
 							class="h-1.5 w-24 cursor-pointer appearance-none rounded-full bg-white/20 bg-gradient-to-r from-white to-white bg-no-repeat accent-white opacity-0 transition-opacity group-hover/vol:opacity-100"
 						/>
 					</div>

@@ -113,7 +113,7 @@
 			<div class="hidden grid-cols-12 gap-4 rounded-lg bg-[#151921]/50 px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 sm:grid">
 				<div class="col-span-6 md:col-span-7">Name</div>
 				<div class="col-span-2 hidden md:block">Date</div>
-				<div class="col-span-3 md:col-span-2 text-right">Size</div>
+				<div class="col-span-3 md:col-span-2">Size</div>
 				<div class="col-span-3 md:col-span-1 text-right">Action</div>
 			</div>
 
@@ -140,12 +140,12 @@
 					</div>
 
 					<!-- Size -->
-					<div class="col-span-3 text-sm text-gray-400 sm:text-right md:col-span-2">
+					<div class="col-span-3 text-sm text-gray-400 md:col-span-2">
 						{formatBytes(doc.fileSize)}
 					</div>
 
 					<!-- Actions -->
-					<div class="col-span-3 flex justify-end gap-2 md:col-span-1">
+					<div class="col-span-3 flex items-center justify-start sm:justify-end gap-1 md:col-span-1">
 						<!-- Preview in New Tab (Inline) -->
 						<a
 							href={`/api/files/${doc.id}/download`}
