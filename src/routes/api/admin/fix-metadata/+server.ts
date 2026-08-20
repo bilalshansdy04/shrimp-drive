@@ -26,12 +26,20 @@ export const GET: RequestHandler = async ({ locals }) => {
 			)
 		);
 
+	// Fetch Telegram Node
+	const { telegramNodes } = await import('$lib/server/db/schema');
+	const nodeResult = await db.select().from(telegramNodes).where(eq(telegramNodes.id, locals.user.telegramNodeId!));
+	if (nodeResult.length === 0) {
+		throw error(400, 'Telegram node not found');
+	}
+	const node = nodeResult[0];
+
 	let fixedCount = 0;
 	let errors = [];
 
 	for (const file of mediaFiles) {
 		try {
-			const tgUrl = await getFileDownloadUrl(locals.user.telegramBotToken, file.telegramFileId);
+			const tgUrl = await getFileDownloadUrl(node.botToken, file.telegramFileId);
 			const response = await fetch(tgUrl);
 			
 			if (!response.ok) {
@@ -59,8 +67,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 				const pic = audioMeta.common.picture[0];
 				const picBlob = new Blob([pic.data as unknown as BlobPart], { type: pic.format });
 				const picTgResult = await uploadFileToTelegram(
-					locals.user.telegramBotToken,
-					locals.user.telegramChatId,
+					node.botToken,
+					node.chatId,
 					picBlob,
 					'cover.jpg'
 				);

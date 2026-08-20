@@ -88,7 +88,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		// If user is logged in but hasn't onboarded (telegram setup), force onboarding
 		// Exclude onboarding route itself to prevent redirect loop
-		if (!event.locals.user.telegramBotToken && pathname !== '/onboarding' && !pathname.startsWith('/api/')) {
+		if (!event.locals.user.telegramNodeId && pathname !== '/onboarding' && !pathname.startsWith('/api/')) {
 			throw redirect(303, '/onboarding');
 		}
 	}

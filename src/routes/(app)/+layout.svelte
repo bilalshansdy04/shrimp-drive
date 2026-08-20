@@ -280,6 +280,11 @@
 	bind:volume={media.volume}
 	src={media.currentTrack ? `/api/files/${media.currentTrack.id}/download` : undefined}
 	onended={() => media.playNext()}
+	onerror={() => {
+		if (media.currentTrack?.isEncrypted) {
+			toast.error('File audio rusak atau kunci dekripsi tidak cocok');
+		}
+	}}
 	autoplay
 ></audio>
 {/if}

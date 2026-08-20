@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { uploadFileToTelegram } from '$lib/server/telegram';
 import { parseBuffer } from 'music-metadata';
 import crypto from 'crypto';
+import { encryptBuffer } from '$lib/server/crypto';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB soft limit
 
@@ -88,6 +89,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
+		// Fetch Telegram Node
+		const { telegramNodes, encryptionKeys } = await import('$lib/server/db/schema');
+		const nodeResult = await db.select().from(telegramNodes).where(eq(telegramNodes.id, locals.user.telegramNodeId!));
+		if (nodeResult.length === 0) {
+			return json({ error: 'Telegram node not found' }, { status: 400 });
+		}
+		const node = nodeResult[0];
+
+		// Fetch Encryption Key if needed
+		let encryptionKeyStr: string | null = null;
+		if (locals.user.encryptionKeyId) {
+			const keyResult = await db.select().from(encryptionKeys).where(eq(encryptionKeys.id, locals.user.encryptionKeyId));
+			if (keyResult.length > 0) {
+				encryptionKeyStr = keyResult[0].keyValue;
+			}
+		}
+
 		let metadata: any = {};
 
 		if (fileType === 'audio') {
@@ -107,8 +125,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					const picBlob = new Blob([pic.data as unknown as BlobPart], { type: pic.format });
 					try {
 						const picTgResult = await uploadFileToTelegram(
-							locals.user.telegramBotToken,
-							locals.user.telegramChatId,
+							node.botToken,
+							node.chatId,
 							picBlob,
 							'cover.jpg'
 						);
@@ -136,41 +154,59 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
-		// Upload to Telegram
-		const tgResult = await uploadFileToTelegram(
-			locals.user.telegramBotToken,
-			locals.user.telegramChatId,
-			file,
-			finalFileName
-		);
-
 		let fileId: string = crypto.randomUUID();
+		let existingFile: any = null;
 
 		if (conflictAction === 'replace' && replaceFileId) {
-			const { and, eq } = await import('drizzle-orm');
-			const existingFile = await db.query.files.findFirst({
+			existingFile = await db.query.files.findFirst({
 				where: and(eq(files.id, replaceFileId), eq(files.userId, locals.user.id))
 			});
-
 			if (existingFile) {
 				fileId = existingFile.id;
-				await db.update(files).set({
-					fileType: fileType,
-					mimeType: file.type || 'application/octet-stream',
-					fileSize: file.size,
-					telegramFileId: tgResult.telegramFileId,
-					title: metadata.title,
-					artist: metadata.artist,
-					album: metadata.album,
-					duration: metadata.duration ? Math.round(metadata.duration) : null,
-					thumbnailUrl: metadata.thumbnailUrl || null
-				}).where(eq(files.id, fileId));
-
-				const sizeDiff = file.size - existingFile.fileSize;
-				await db.update(users).set({ storageUsed: locals.user.storageUsed + sizeDiff }).where(eq(users.id, locals.user.id));
-				
-				return json({ success: true, fileId });
 			}
+		}
+
+		let uploadData: File | Blob = file;
+		let isEncrypted = false;
+
+		if (locals.user.encryptionMode === 'locked_on' || (locals.user.encryptionMode === 'flexible' && locals.user.isEncryptionActive)) {
+			if (!encryptionKeyStr) {
+				return json({ error: 'Encryption key not found.' }, { status: 400 });
+			}
+			const buffer = Buffer.from(await file.arrayBuffer());
+			const encryptedBuffer = encryptBuffer(buffer, encryptionKeyStr, fileId);
+			uploadData = new Blob([encryptedBuffer as unknown as BlobPart], { type: file.type || 'application/octet-stream' });
+			isEncrypted = true;
+		}
+
+		const tgFileName = isEncrypted ? `${crypto.randomUUID().replace(/-/g, '')}.txt` : finalFileName;
+
+		// Upload to Telegram
+		const tgResult = await uploadFileToTelegram(
+			node.botToken,
+			node.chatId,
+			uploadData,
+			tgFileName
+		);
+
+		if (conflictAction === 'replace' && replaceFileId && existingFile) {
+			await db.update(files).set({
+				fileType: fileType,
+				mimeType: file.type || 'application/octet-stream',
+				fileSize: file.size,
+				telegramFileId: tgResult.telegramFileId,
+				title: metadata.title,
+				artist: metadata.artist,
+				album: metadata.album,
+				duration: metadata.duration ? Math.round(metadata.duration) : null,
+				thumbnailUrl: metadata.thumbnailUrl || null,
+				isEncrypted
+			}).where(eq(files.id, fileId));
+
+			const sizeDiff = file.size - existingFile.fileSize;
+			await db.update(users).set({ storageUsed: locals.user.storageUsed + sizeDiff }).where(eq(users.id, locals.user.id));
+			
+			return json({ success: true, fileId });
 		}
 
 		await db.insert(files).values({
@@ -186,7 +222,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			artist: metadata.artist,
 			album: metadata.album,
 			duration: metadata.duration ? Math.round(metadata.duration) : null,
-			thumbnailUrl: metadata.thumbnailUrl || null
+			thumbnailUrl: metadata.thumbnailUrl || null,
+			isEncrypted
 		});
 
 		const newStorageUsed = locals.user.storageUsed + file.size;

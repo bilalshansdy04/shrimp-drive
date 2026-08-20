@@ -3,6 +3,7 @@
 	import type { PageData } from './$types';
 	import { media } from '$lib/client/mediaState.svelte';
 	import { onMount } from 'svelte';
+	import { toast } from 'svelte-sonner';
 
 	let { data }: { data: PageData } = $props();
 	let videoFile = $derived(data.videoFile);
@@ -94,6 +95,11 @@
 			oncanplay={() => isBuffering = false}
 			onpause={() => isBuffering = false}
 			onloadeddata={() => isBuffering = false}
+			onerror={() => {
+				if (videoFile.isEncrypted) {
+					toast.error('File video rusak atau kunci dekripsi tidak cocok. Disarankan hapus file dan upload ulang');
+				}
+			}}
 		></video>
 
 		{#if isBuffering}

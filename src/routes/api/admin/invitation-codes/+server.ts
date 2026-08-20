@@ -1,10 +1,11 @@
 import { json, error } from '@sveltejs/kit';
 import { requireAdminAuth } from '$lib/server/adminAuth';
 import { db } from '$lib/server/db';
-import { invitationCodes } from '$lib/server/db/schema';
-import { desc } from 'drizzle-orm';
-import crypto from 'crypto';
+import { invitationCodes, encryptionKeys } from '$lib/server/db/schema';
+import { desc, eq } from 'drizzle-orm';
+import crypto from 'node:crypto';
 import type { RequestHandler } from './$types';
+import { generateRandomKey } from '$lib/server/crypto';
 
 export const GET: RequestHandler = async ({ request }) => {
 	requireAdminAuth(request);
@@ -15,14 +16,16 @@ export const GET: RequestHandler = async ({ request }) => {
 			code: invitationCodes.code,
 			type: invitationCodes.type,
 			encryptionMode: invitationCodes.encryptionMode,
-			storageLimit: invitationCodes.storageLimit,
+			bonusAmount: invitationCodes.bonusAmount,
 			usedCount: invitationCodes.usedCount,
 			maxUses: invitationCodes.maxUses,
 			isRevoked: invitationCodes.isRevoked,
-			assignedChatId: invitationCodes.assignedChatId, // frontend can censor this if needed
+			assignedNodeId: invitationCodes.assignedNodeId,
+			encryptionKey: encryptionKeys.keyValue,
 			createdAt: invitationCodes.createdAt
 		})
 		.from(invitationCodes)
+		.leftJoin(encryptionKeys, eq(invitationCodes.encryptionKeyId, encryptionKeys.id))
 		.orderBy(desc(invitationCodes.createdAt));
 
 	return json(codes);
@@ -33,25 +36,31 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const body = await request.json();
 	const { 
-		code, type, encryptionMode, storageLimit, 
-		assignedBotToken, assignedChatId, maxUses = 1 
+		code, type, encryptionMode, bonusAmount, 
+		assignedNodeId, maxUses = 1 
 	} = body;
 
-	if (!type || !encryptionMode || !storageLimit) {
-		throw error(400, 'Missing required fields: type, encryptionMode, storageLimit');
+	if (!type || !encryptionMode || bonusAmount === undefined) {
+		throw error(400, 'Missing required fields: type, encryptionMode, bonusAmount');
 	}
 
 	const finalCode = code || crypto.randomBytes(3).toString('hex').toUpperCase();
+
+	const newKeyId = crypto.randomUUID();
+	await db.insert(encryptionKeys).values({
+		id: newKeyId,
+		keyValue: generateRandomKey()
+	});
 
 	const newCode = await db.insert(invitationCodes).values({
 		id: crypto.randomUUID(),
 		code: finalCode,
 		type,
 		encryptionMode,
-		storageLimit,
+		encryptionKeyId: newKeyId,
+		bonusAmount,
 		maxUses,
-		assignedBotToken,
-		assignedChatId
+		assignedNodeId
 	}).returning();
 
 	return json(newCode[0]);
