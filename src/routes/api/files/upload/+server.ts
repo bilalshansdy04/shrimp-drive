@@ -89,6 +89,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
+		// Fetch Telegram Node
+		const { telegramNodes, encryptionKeys } = await import('$lib/server/db/schema');
+		const nodeResult = await db.select().from(telegramNodes).where(eq(telegramNodes.id, locals.user.telegramNodeId!));
+		if (nodeResult.length === 0) {
+			return json({ error: 'Telegram node not found' }, { status: 400 });
+		}
+		const node = nodeResult[0];
+
+		// Fetch Encryption Key if needed
+		let encryptionKeyStr: string | null = null;
+		if (locals.user.encryptionKeyId) {
+			const keyResult = await db.select().from(encryptionKeys).where(eq(encryptionKeys.id, locals.user.encryptionKeyId));
+			if (keyResult.length > 0) {
+				encryptionKeyStr = keyResult[0].keyValue;
+			}
+		}
+
 		let metadata: any = {};
 
 		if (fileType === 'audio') {
@@ -108,8 +125,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					const picBlob = new Blob([pic.data as unknown as BlobPart], { type: pic.format });
 					try {
 						const picTgResult = await uploadFileToTelegram(
-							locals.user.telegramBotToken,
-							locals.user.telegramChatId,
+							node.botToken,
+							node.chatId,
 							picBlob,
 							'cover.jpg'
 						);
@@ -138,7 +155,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		let fileId: string = crypto.randomUUID();
-		const { and, eq } = await import('drizzle-orm');
 		let existingFile: any = null;
 
 		if (conflictAction === 'replace' && replaceFileId) {
@@ -154,11 +170,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let isEncrypted = false;
 
 		if (locals.user.encryptionMode === 'locked_on' || (locals.user.encryptionMode === 'flexible' && locals.user.isEncryptionActive)) {
-			if (!locals.user.encryptionKey) {
+			if (!encryptionKeyStr) {
 				return json({ error: 'Encryption key not found.' }, { status: 400 });
 			}
 			const buffer = Buffer.from(await file.arrayBuffer());
-			const encryptedBuffer = encryptBuffer(buffer, locals.user.encryptionKey, fileId);
+			const encryptedBuffer = encryptBuffer(buffer, encryptionKeyStr, fileId);
 			uploadData = new Blob([encryptedBuffer as unknown as BlobPart], { type: file.type || 'application/octet-stream' });
 			isEncrypted = true;
 		}
@@ -167,8 +183,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Upload to Telegram
 		const tgResult = await uploadFileToTelegram(
-			locals.user.telegramBotToken,
-			locals.user.telegramChatId,
+			node.botToken,
+			node.chatId,
 			uploadData,
 			tgFileName
 		);

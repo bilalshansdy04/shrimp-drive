@@ -1,14 +1,26 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
+import { users, encryptionKeys } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import { generateRandomKey } from '$lib/server/crypto';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	let encryptionKeyStr: string | null = null;
+	if (locals.user && locals.user.encryptionKeyId) {
+		const keyResult = await db.select().from(encryptionKeys).where(eq(encryptionKeys.id, locals.user.encryptionKeyId));
+		if (keyResult.length > 0) {
+			encryptionKeyStr = keyResult[0].keyValue;
+		}
+	}
+	
 	return {
-		user: locals.user
+		user: {
+			...locals.user,
+			encryptionKey: encryptionKeyStr
+		}
 	};
 };
 
@@ -82,14 +94,19 @@ export const actions: Actions = {
 
 		const isActive = action === 'on';
 
-		let key = locals.user.encryptionKey;
-		if (isActive && !key) {
-			key = generateRandomKey();
+		let newKeyId: string | null = null;
+		
+		if (isActive && !locals.user.encryptionKeyId) {
+			newKeyId = crypto.randomUUID();
+			await db.insert(encryptionKeys).values({
+				id: newKeyId,
+				keyValue: generateRandomKey()
+			});
 		}
 
 		await db.update(users).set({ 
 			isEncryptionActive: isActive,
-			...(key ? { encryptionKey: key } : {})
+			...(newKeyId ? { encryptionKeyId: newKeyId } : {})
 		}).where(eq(users.id, locals.user.id));
 
 		return { success: isActive ? 'Encryption enabled for future uploads.' : 'Encryption disabled for future uploads.' };

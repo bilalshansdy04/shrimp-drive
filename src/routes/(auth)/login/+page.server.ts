@@ -41,6 +41,10 @@ export const actions: Actions = {
 			return fail(403, { error: 'Please verify your email before logging in.' });
 		}
 
+		if (!user.isActive) {
+			return fail(403, { error: 'Your account has been deactivated.' });
+		}
+
 		const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
 		if (!isPasswordValid) {

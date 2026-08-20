@@ -26,7 +26,24 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 	const file = result[0];
 
 	try {
-		const downloadUrl = await getFileDownloadUrl(locals.user.telegramBotToken, file.telegramFileId);
+		// Fetch Telegram Node
+		const { telegramNodes, encryptionKeys } = await import('$lib/server/db/schema');
+		const nodeResult = await db.select().from(telegramNodes).where(eq(telegramNodes.id, locals.user.telegramNodeId!));
+		if (nodeResult.length === 0) {
+			throw new Error('Telegram node not found');
+		}
+		const node = nodeResult[0];
+
+		// Fetch Encryption Key if needed
+		let encryptionKeyStr: string | null = null;
+		if (locals.user.encryptionKeyId) {
+			const keyResult = await db.select().from(encryptionKeys).where(eq(encryptionKeys.id, locals.user.encryptionKeyId));
+			if (keyResult.length > 0) {
+				encryptionKeyStr = keyResult[0].keyValue;
+			}
+		}
+
+		const downloadUrl = await getFileDownloadUrl(node.botToken, file.telegramFileId);
 		
 		const requestHeaders = new Headers();
 		const range = request.headers.get('Range');
@@ -62,7 +79,7 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 		let finalBody: any = response.body;
 
 		if (file.isEncrypted) {
-			if (!locals.user.encryptionKey) {
+			if (!encryptionKeyStr) {
 				throw new Error('Encryption key not found');
 			}
 			let offset = 0;
@@ -73,7 +90,7 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 				}
 			}
 			const nodeReadable = Readable.fromWeb(response.body as any);
-			const decipher = createDecryptionStream(locals.user.encryptionKey, file.id, offset);
+			const decipher = createDecryptionStream(encryptionKeyStr, file.id, offset);
 			
 			// Prevent unhandled error crashes when client disconnects
 			nodeReadable.on('error', (err) => {

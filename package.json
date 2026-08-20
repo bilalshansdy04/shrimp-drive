@@ -48,6 +48,7 @@
 		"bcryptjs": "^3.0.3",
 		"bits-ui": "^2.18.1",
 		"clsx": "^2.1.1",
+		"dotenv": "^17.4.2",
 		"drizzle-orm": "^0.45.2",
 		"kuroshiro": "^1.2.0",
 		"kuroshiro-analyzer-kuromoji": "^1.1.0",

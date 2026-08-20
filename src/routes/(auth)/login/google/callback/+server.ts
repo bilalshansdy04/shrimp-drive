@@ -39,12 +39,24 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 
 		if (existingUserResult.length > 0) {
 			const existingUser = existingUserResult[0];
+			if (!existingUser.isActive) {
+				return new Response(null, {
+					status: 302,
+					headers: { Location: '/login?error=Your+account+has+been+deactivated.' }
+				});
+			}
 			userId = existingUser.id;
 		} else {
 			// Check if email is already registered via standard registration
 			const existingEmailResult = await db.select().from(users).where(eq(users.email, googleUser.email));
 			if (existingEmailResult.length > 0) {
 				const existingEmailUser = existingEmailResult[0];
+				if (!existingEmailUser.isActive) {
+					return new Response(null, {
+						status: 302,
+						headers: { Location: '/login?error=Your+account+has+been+deactivated.' }
+					});
+				}
 				userId = existingEmailUser.id;
 				// Link google account
 				await db.update(users).set({ googleId: googleUser.sub, emailVerified: 1 }).where(eq(users.id, userId));
