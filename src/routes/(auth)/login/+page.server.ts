@@ -7,10 +7,6 @@ import bcrypt from 'bcryptjs';
 import { createSession, generateSessionToken } from '$lib/server/auth';
 
 export const load: PageServerLoad = async () => {
-	const userCountResult = await db.select({ count: count() }).from(users);
-	if (userCountResult[0].count === 0) {
-		throw redirect(303, '/register');
-	}
 	return {};
 };
 
@@ -18,21 +14,22 @@ export const actions: Actions = {
 	default: async ({ request, cookies }) => {
 		const data = await request.formData();
 		const username = data.get('username') as string;
-		const password = data.get('password') as string;
+		const authHash = data.get('authHash') as string;
 
-		if (!username || !password) {
+		if (!username || !authHash) {
 			return fail(400, { error: 'Username and password are required.' });
 		}
 
-		const result = await db.select().from(users).where(
-			or(eq(users.username, username), eq(users.email, username))
-		);
+		const result = await db
+			.select()
+			.from(users)
+			.where(or(eq(users.username, username), eq(users.email, username)));
 		if (result.length === 0) {
 			return fail(401, { error: 'Invalid credentials.' });
 		}
 
 		const user = result[0];
-		
+
 		if (!user.passwordHash) {
 			return fail(401, { error: 'Please login with Google.' });
 		}
@@ -45,7 +42,7 @@ export const actions: Actions = {
 			return fail(403, { error: 'Your account has been deactivated.' });
 		}
 
-		const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+		const isPasswordValid = await bcrypt.compare(authHash, user.passwordHash);
 
 		if (!isPasswordValid) {
 			return fail(401, { error: 'Invalid credentials.' });
@@ -61,6 +58,11 @@ export const actions: Actions = {
 			expires: session.expiresAt
 		});
 
-		throw redirect(303, '/dashboard');
+		// Instead of redirecting immediately, return success so the client can unwrap the DEK first.
+		return {
+			success: true,
+			encryptedVaultKey: user.encryptedVaultKey,
+			redirectTo: '/dashboard'
+		};
 	}
 };

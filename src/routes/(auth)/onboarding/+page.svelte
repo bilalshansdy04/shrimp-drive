@@ -1,365 +1,660 @@
 <script lang="ts">
-  import {
-    ArrowRight,
-    ArrowLeft,
-    KeyRound,
-    CheckCircle2,
-    Hash,
-    Rocket,
-    Gift
-  } from "lucide-svelte";
+	import {
+		ArrowRight,
+		ArrowLeft,
+		KeyRound,
+		CheckCircle2,
+		Hash,
+		Rocket,
+		Gift,
+		Globe,
+		Server,
+		Lock
+	} from 'lucide-svelte';
+	import { deriveKeysFromPassword, generateMasterVaultKey, wrapMasterKey } from '$lib/client/crypto';
+	import { saveVaultKeyToSession } from '$lib/client/encryptionStore';
 
-  let currentStep = $state(1);
-  let inviteCode = $state("");
-  let inviteType = $state("");
-  let botToken = $state("");
-  let botVerified = $state(false);
-  let chatId = $state("");
-  let pingSuccess = $state(false);
-  
-  let isLoading = $state(false);
-  let errorMsg = $state("");
+	let { data } = $props<{ data: { hasPassword: boolean; hasEncryptedVaultKey: boolean; email: string } }>();
 
-  async function verifyInviteCode() {
-    errorMsg = "";
-    
-    // Allow empty code (Skip)
-    if (!inviteCode) {
-      inviteType = 'regular_self_setup';
-      currentStep = 2; // Go to bot setup
-      return;
-    }
+	// Flow:
+	// 1: Choose Backend (Global vs Custom)
+	// If Global: 1 -> 5 (PIN if needed) -> 4 (Ready)
+	// If Custom: 1 -> 2 (Bot) -> 3 (Channel) -> 5 (PIN if needed) -> 4 (Ready)
+	let currentStep = $state(1);
+	let backendChoice = $state<'global' | 'custom'>('global');
 
-    if (inviteCode.length < 5) {
-      errorMsg = "Invalid invite code length.";
-      return;
-    }
-    
-    isLoading = true;
-    try {
-      const res = await fetch('/api/verify-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: inviteCode })
-      });
-      const data = await res.json();
-      if (data.success) {
-        inviteType = data.type;
-        if (inviteType === 'friend_zero_setup') {
-          currentStep = 4; // Jump to ready
-        } else {
-          currentStep = 2; // Go to bot setup
-        }
-      } else {
-        errorMsg = data.error;
-      }
-    } catch (e) {
-      errorMsg = "Failed to verify code.";
-    }
-    isLoading = false;
-  }
+	let inviteCode = $state('');
+	let inviteType = $state(''); // optional
+	let inviteCodeError = $state('');
+	let enableEncryption = $state(true);
 
-  function prevStep() {
-    if (currentStep > 1) {
-      if (inviteType === 'friend_zero_setup' && currentStep === 4) {
-        currentStep = 1;
-      } else {
-        currentStep--;
-      }
-      errorMsg = "";
-    }
-  }
+	let botToken = $state('');
+	let botVerified = $state(false);
+	let chatId = $state('');
+	let pingSuccess = $state(false);
 
-  function nextStep() {
-    if (currentStep < 4) currentStep++;
-  }
+	let vaultPin = $state('');
+	let confirmPin = $state('');
+	
+	let isLoading = $state(false);
+	let errorMsg = $state('');
 
-  async function verifyBot() {
-    errorMsg = "";
-    if (botToken.length < 10) {
-      errorMsg = "Token is too short.";
-      return;
-    }
-    
-    isLoading = true;
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
-      const data = await res.json();
-      if (data.ok) {
-        botVerified = true;
-      } else {
-        errorMsg = "Invalid Bot Token.";
-      }
-    } catch (e) {
-      errorMsg = "Failed to connect to Telegram API.";
-    }
-    isLoading = false;
-  }
+	function prevStep() {
+		if (currentStep === 5) {
+			if (backendChoice === 'global') currentStep = 1;
+			else currentStep = 3;
+		} else if (currentStep === 4) {
+			if (!data.hasPassword) currentStep = 5;
+			else if (backendChoice === 'global') currentStep = 1;
+			else currentStep = 3;
+		} else {
+			if (currentStep > 1) {
+				currentStep--;
+			}
+		}
+		errorMsg = '';
+	}
 
-  async function testPing() {
-    errorMsg = "";
-    pingSuccess = false;
-    if (!chatId || !botVerified) return;
-    
-    isLoading = true;
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: '🦐 Ping! Shrimp Drive is successfully connected to this channel.'
-        })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        pingSuccess = true;
-      } else {
-        errorMsg = `Failed to send ping: ${data.description}`;
-      }
-    } catch (e) {
-      errorMsg = "Failed to connect to Telegram API.";
-    }
-    isLoading = false;
-  }
+	async function nextStep() {
+		if (currentStep === 1) {
+			if (backendChoice === 'global') {
+				if (inviteCode) {
+					if (inviteCode.length < 5) {
+						inviteCodeError = 'Invalid invite code length.';
+						return;
+					}
+					isLoading = true;
+					try {
+						const res = await fetch('/api/verify-code', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ code: inviteCode })
+						});
+						const rData = await res.json();
+						if (rData.success) {
+							inviteType = rData.type;
+							currentStep = !data.hasPassword ? 5 : 4;
+						} else {
+							inviteCodeError = rData.error;
+						}
+					} catch (e) {
+						inviteCodeError = 'Failed to verify code.';
+					}
+					isLoading = false;
+				} else {
+					currentStep = !data.hasPassword ? 5 : 4;
+				}
+			} else {
+				currentStep = 2; // Bot Setup
+			}
+		} else if (currentStep === 2 && backendChoice === 'custom') {
+			currentStep = 3; // Channel
+		} else if (currentStep === 3 && backendChoice === 'custom') {
+			currentStep = !data.hasPassword ? 5 : 4;
+		} else if (currentStep === 5) {
+			// PIN Setup validation
+			if (vaultPin.length < 6) {
+				errorMsg = 'PIN must be at least 6 characters.';
+				return;
+			}
+			if (vaultPin !== confirmPin) {
+				errorMsg = 'PINs do not match.';
+				return;
+			}
+			errorMsg = '';
+			currentStep = 4;
+		}
+	}
 
-  async function submitOnboarding() {
-    isLoading = true;
-    errorMsg = "";
-    try {
-      const res = await fetch('/onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: inviteCode,
-          botToken: inviteType === 'regular_self_setup' ? botToken : undefined,
-          chatId: inviteType === 'regular_self_setup' ? chatId : undefined
-        })
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        window.location.href = '/dashboard';
-      } else {
-        errorMsg = data.error || 'Failed to finish onboarding.';
-      }
-    } catch (err) {
-      errorMsg = 'An unexpected error occurred.';
-    }
-    isLoading = false;
-  }
+	async function verifyBot() {
+		errorMsg = '';
+		if (botToken.length < 10) {
+			errorMsg = 'Token is too short.';
+			return;
+		}
+
+		isLoading = true;
+		try {
+			const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+			const getMeData = await res.json();
+			if (getMeData.ok) {
+				botVerified = true;
+			} else {
+				errorMsg = 'Invalid Bot Token.';
+			}
+		} catch (e) {
+			errorMsg = 'Failed to connect to Telegram API.';
+		}
+		isLoading = false;
+	}
+
+	async function testPing() {
+		errorMsg = '';
+		pingSuccess = false;
+		if (!chatId || !botVerified) return;
+
+		isLoading = true;
+		try {
+			const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					chat_id: chatId,
+					text: '🦐 Ping! Shrimp Drive is successfully connected to this channel.'
+				})
+			});
+			const rData = await res.json();
+			if (rData.ok) {
+				pingSuccess = true;
+			} else {
+				errorMsg = `Failed to send ping: ${rData.description}`;
+			}
+		} catch (e) {
+			errorMsg = 'Failed to connect to Telegram API.';
+		}
+		isLoading = false;
+	}
+
+	async function submitOnboarding() {
+		isLoading = true;
+		errorMsg = '';
+		try {
+			let authHash = undefined;
+			let encryptedVaultKey = undefined;
+
+			// If they don't have a password, they must have set a PIN in step 5
+			if (!data.hasPassword && vaultPin.length >= 6) {
+				// 1. Derive KEK and authHash
+				const keys = await deriveKeysFromPassword(vaultPin, data.email);
+				authHash = keys.authHash;
+				
+				// 2. Generate Master Key (DEK)
+				const dek = generateMasterVaultKey();
+				
+				// 3. Wrap DEK with KEK
+				encryptedVaultKey = await wrapMasterKey(dek, keys.kek);
+				
+				// Save DEK to session so it's ready to use in dashboard
+				saveVaultKeyToSession(dek);
+			}
+
+			const res = await fetch('/onboarding', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					backendChoice,
+					code: backendChoice === 'global' ? inviteCode : undefined,
+					botToken: backendChoice === 'custom' ? botToken : undefined,
+					chatId: backendChoice === 'custom' ? chatId : undefined,
+					enableEncryption,
+					authHash,
+					encryptedVaultKey
+				})
+			});
+			const rData = await res.json();
+
+			if (rData.success) {
+				window.location.href = '/dashboard';
+			} else {
+				errorMsg = rData.error || 'Failed to finish onboarding.';
+			}
+		} catch (err) {
+			errorMsg = 'An unexpected error occurred.';
+			console.error(err);
+		}
+		isLoading = false;
+	}
 </script>
 
-<div class="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-[#0B0E14] text-white">
-  <!-- Ambient Overlay -->
-  <div class="absolute inset-0 pointer-events-none z-0 opacity-10" style="background: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%232A3241\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
-  
-  <div class="absolute inset-0 pointer-events-none z-0" style="background: radial-gradient(circle at 50% -20%, rgba(255, 107, 74, 0.15), transparent 60%);"></div>
+<div
+	class="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0B0E14] p-6 text-white"
+>
+	<!-- Ambient Overlay -->
+	<div
+		class="pointer-events-none absolute inset-0 z-0 opacity-10"
+		style="background: url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%232A3241\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"
+	></div>
 
-  <main class="w-full max-w-[600px] z-10">
-    <!-- Header -->
-    <header class="text-center mb-8 flex flex-col items-center">
-      <div class="flex items-center gap-2 mb-2">
-        <img alt="Shrimp Drive Logo" class="w-10 h-10 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGvKZiSWhKMKF4oL_J9_HFMU0WChW-H3PdTFKDH5fcwzeRD8cucxiu_m8SCwkkem_gncQ3pHQMY9XKT1E_Qo_Load05oN_wTLuSRdXuYGaOIOAuwO-Jy6LtN_Xg9SR377LbmXzEHCaItWXyb5TYNgLWxalFLC77QpW1a9iCyl4JMZYRXakuFTpelbzhSNjKiFehO624W8ZuGIfUwWxUCn8r76HAs-112uICmmFtYLuBBMM0ZqDiZD2"/>
-        <h1 class="text-3xl font-bold text-white">Shrimp Drive</h1>
-      </div>
-      <span class="inline-block bg-[#151921] border border-[#2A3241] rounded-full px-4 py-1 text-xs font-medium text-[#FF6B4A] tracking-wider uppercase">Initial Setup</span>
-      
-      {#if errorMsg}
-        <div class="mt-4 bg-[#93000a] text-[#ffdad6] px-4 py-2 rounded-lg text-sm font-medium animate-[fadeIn_0.3s_ease]">
-          {errorMsg}
-        </div>
-      {/if}
-    </header>
+	<div
+		class="pointer-events-none absolute inset-0 z-0"
+		style="background: radial-gradient(circle at 50% -20%, rgba(255, 107, 74, 0.15), transparent 60%);"
+	></div>
 
-    <!-- Main Card -->
-    <div class="bg-[#151921] border border-[#2A3241] rounded-2xl p-6 md:p-8 shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.5)]">
-      
-      <!-- Stepper -->
-      <div class="flex items-center justify-between mb-8 px-2">
-        <!-- Node 1 -->
-        <div class="flex flex-col items-center gap-1">
-          <div class="w-3 h-3 rounded-full transition-all duration-300 {currentStep >= 1 ? 'bg-[#FF6B4A] shadow-[0_0_0_4px_rgba(255,107,74,0.2)]' : 'bg-[#151921] border-2 border-[#2A3241]'}"></div>
-          <span class="text-xs font-medium {currentStep >= 1 ? 'text-[#FF6B4A]' : 'text-gray-400'}">Invite</span>
-        </div>
-        <div class="flex-grow h-0.5 mx-2 transition-colors duration-300 {currentStep >= 2 ? 'bg-[#FF6B4A]' : 'bg-[#2A3241]'}"></div>
-        
-        <!-- Node 2 -->
-        <div class="flex flex-col items-center gap-1">
-          <div class="w-3 h-3 rounded-full transition-all duration-300 {currentStep >= 2 ? 'bg-[#FF6B4A] shadow-[0_0_0_4px_rgba(255,107,74,0.2)]' : 'bg-[#151921] border-2 border-[#2A3241]'}"></div>
-          <span class="text-xs font-medium {currentStep >= 2 ? 'text-[#FF6B4A]' : 'text-gray-400'}">Bot Setup</span>
-        </div>
-        <div class="flex-grow h-0.5 mx-2 transition-colors duration-300 {currentStep >= 3 ? 'bg-[#FF6B4A]' : 'bg-[#2A3241]'}"></div>
-        
-        <!-- Node 3 -->
-        <div class="flex flex-col items-center gap-1">
-          <div class="w-3 h-3 rounded-full transition-all duration-300 {currentStep >= 3 ? 'bg-[#FF6B4A] shadow-[0_0_0_4px_rgba(255,107,74,0.2)]' : 'bg-[#151921] border-2 border-[#2A3241]'}"></div>
-          <span class="text-xs font-medium {currentStep >= 3 ? 'text-[#FF6B4A]' : 'text-gray-400'}">Storage</span>
-        </div>
-        <div class="flex-grow h-0.5 mx-2 transition-colors duration-300 {currentStep >= 4 ? 'bg-[#FF6B4A]' : 'bg-[#2A3241]'}"></div>
-        
-        <!-- Node 4 -->
-        <div class="flex flex-col items-center gap-1">
-          <div class="w-3 h-3 rounded-full transition-all duration-300 {currentStep >= 4 ? 'bg-[#FF6B4A] shadow-[0_0_0_4px_rgba(255,107,74,0.2)]' : 'bg-[#151921] border-2 border-[#2A3241]'}"></div>
-          <span class="text-xs font-medium {currentStep >= 4 ? 'text-[#FF6B4A]' : 'text-gray-400'}">Ready</span>
-        </div>
-      </div>
+	<main class="z-10 w-full max-w-[600px]">
+		<!-- Header -->
+		<header class="mb-8 flex flex-col items-center text-center">
+			<div class="mb-2 flex items-center gap-2">
+				<img
+					alt="Shrimp Drive Logo"
+					class="h-10 w-10 object-contain"
+					src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGvKZiSWhKMKF4oL_J9_HFMU0WChW-H3PdTFKDH5fcwzeRD8cucxiu_m8SCwkkem_gncQ3pHQMY9XKT1E_Qo_Load05oN_wTLuSRdXuYGaOIOAuwO-Jy6LtN_Xg9SR377LbmXzEHCaItWXyb5TYNgLWxalFLC77QpW1a9iCyl4JMZYRXakuFTpelbzhSNjKiFehO624W8ZuGIfUwWxUCn8r76HAs-112uICmmFtYLuBBMM0ZqDiZD2"
+				/>
+				<h1 class="text-3xl font-bold text-white">Shrimp Drive</h1>
+			</div>
+			<span
+				class="inline-block rounded-full border border-[#2A3241] bg-[#151921] px-4 py-1 text-xs font-medium tracking-wider text-[#FF6B4A] uppercase"
+				>Initial Setup</span
+			>
 
-      <!-- Step 1: Invitation Code -->
-      {#if currentStep === 1}
-        <section class="animate-[fadeIn_0.3s_ease]">
-          <h2 class="text-2xl font-bold text-white mb-2">Invitation Code</h2>
-          <p class="text-sm text-gray-400 mb-6">Enter your invitation code provided by the administrator to configure your storage backend.</p>
-          
-          <div class="space-y-4">
-            <div class="relative group">
-              <label class="block text-xs font-medium text-gray-400 mb-1" for="inviteCode">Code</label>
-              <div class="relative flex items-center">
-                <Gift class="absolute left-3 text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input bind:value={inviteCode} id="inviteCode" class="w-full bg-[#0B0E14] border border-[#2A3241] rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="e.g. SHRIMP-123" type="text"/>
-              </div>
-            </div>
-          </div>
-          
-          <div class="flex justify-end mt-8 pt-4 border-t border-[#2A3241]">
-            <button class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-2 flex items-center gap-2 text-sm transition-colors disabled:opacity-50" onclick={verifyInviteCode} disabled={isLoading}>
-              {isLoading ? 'Verifying...' : 'Next'} <ArrowRight size={18} />
-            </button>
-          </div>
-        </section>
-      {/if}
+			{#if errorMsg}
+				<div
+					class="mt-4 animate-[fadeIn_0.3s_ease] rounded-lg bg-[#93000a] px-4 py-2 text-sm font-medium text-[#ffdad6]"
+				>
+					{errorMsg}
+				</div>
+			{/if}
+		</header>
 
-      <!-- Step 2: Bot Link -->
-      {#if currentStep === 2}
-        <section class="animate-[fadeIn_0.3s_ease]">
-          <h2 class="text-2xl font-bold text-white mb-2">Connect Telegram Bot</h2>
-          <p class="text-sm text-gray-400 mb-6">Shrimp Drive uses Telegram as its storage backend. Create a bot via @BotFather and paste the token here.</p>
-          
-          <div class="bg-[#0B0E14] border border-[#2A3241] rounded-lg p-4 mb-4">
-            <ol class="list-decimal list-inside text-sm text-gray-400 space-y-2">
-              <li>Message <a class="text-[#FF6B4A] hover:underline" href="https://t.me/BotFather" target="_blank">@BotFather</a> on Telegram.</li>
-              <li>Send <code class="text-xs bg-[#151921] px-1 rounded border border-[#2A3241]">/newbot</code> and follow prompts.</li>
-              <li>Copy the HTTP API Token provided.</li>
-            </ol>
-          </div>
-          
-          <div class="relative mb-4">
-            <label class="block text-xs font-medium text-gray-400 mb-1" for="bot-token">HTTP API Token</label>
-            <div class="flex gap-2">
-              <div class="relative flex-grow flex items-center group">
-                <KeyRound class="absolute left-3 {botVerified ? 'text-[#4edea3]' : 'text-[#2A3241]'} group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input bind:value={botToken} class="w-full bg-[#0B0E14] border {botVerified ? 'border-[#4edea3]' : 'border-[#2A3241]'} rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" id="bot-token" placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ" type="text"/>
-              </div>
-              <button disabled={isLoading} class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 text-sm flex items-center gap-2 whitespace-nowrap transition-colors disabled:opacity-50" onclick={verifyBot}>
-                {isLoading ? 'Verifying...' : 'Verify'}
-              </button>
-            </div>
-          </div>
-          
-          {#if botVerified}
-            <div class="flex items-center gap-2 text-[#4edea3] text-xs font-medium animate-[fadeIn_0.3s_ease]">
-              <CheckCircle2 size={18} />
-              Bot successfully connected.
-            </div>
-          {/if}
-          
-          <div class="flex justify-between mt-8 pt-4 border-t border-[#2A3241]">
-            <button class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 flex items-center gap-2 text-sm transition-colors" onclick={prevStep}>
-              <ArrowLeft size={18} /> Back
-            </button>
-            <button class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-2 flex items-center gap-2 text-sm transition-colors" onclick={nextStep}>
-              Next <ArrowRight size={18} />
-            </button>
-          </div>
-        </section>
-      {/if}
+		<!-- Main Card -->
+		<div
+			class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.5)] md:p-8"
+		>
+			<!-- Step 1: Choose Backend & Options -->
+			{#if currentStep === 1}
+				<section class="animate-[fadeIn_0.3s_ease]">
+					<h2 class="mb-2 text-2xl font-bold text-white">Select Storage Node</h2>
+					<p class="mb-6 text-sm text-gray-400">
+						Choose how you want to configure your Shrimp Drive storage backend.
+					</p>
 
-      <!-- Step 3: Channel Link -->
-      {#if currentStep === 3}
-        <section class="animate-[fadeIn_0.3s_ease]">
-          <h2 class="text-2xl font-bold text-white mb-2">Storage Channel</h2>
-          <p class="text-sm text-gray-400 mb-6">Create a private channel to act as your limitless storage drive and add your bot as an admin.</p>
-          
-          <div class="bg-[#0B0E14] border border-[#2A3241] rounded-lg p-4 mb-4">
-            <ol class="list-decimal list-inside text-sm text-gray-400 space-y-2">
-              <li>Create a New Channel in Telegram.</li>
-              <li>Set it to <strong>Private</strong>.</li>
-              <li>Add the bot you just created as an <strong>Administrator</strong>.</li>
-              <li>Forward a message from that channel to <a class="text-[#FF6B4A] hover:underline" href="https://t.me/userinfobot" target="_blank">@userinfobot</a> to get the ID.</li>
-            </ol>
-          </div>
-          
-          <div class="relative mb-4 group">
-            <label class="block text-xs font-medium text-gray-400 mb-1" for="channel-id">Channel ID</label>
-            <div class="flex gap-2">
-              <div class="relative flex-grow flex items-center">
-                <Hash class="absolute left-3 {pingSuccess ? 'text-[#4edea3]' : 'text-[#2A3241]'} group-focus-within:text-[#FF6B4A] transition-colors" size={20} />
-                <input bind:value={chatId} id="channel-id" class="w-full bg-[#0B0E14] border {pingSuccess ? 'border-[#4edea3]' : 'border-[#2A3241]'} rounded-lg py-2 pl-10 pr-3 text-white text-sm focus:border-[#FF6B4A] focus:outline-none transition-colors" placeholder="-1001234567890" type="text"/>
-              </div>
-              <button disabled={isLoading} class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 text-sm flex items-center gap-2 whitespace-nowrap transition-colors disabled:opacity-50" onclick={testPing}>
-                {isLoading ? 'Testing...' : 'Test Ping'}
-              </button>
-            </div>
-          </div>
-          
-          {#if pingSuccess}
-            <div class="flex items-center gap-2 text-[#4edea3] text-xs font-medium animate-[fadeIn_0.3s_ease]">
-              <CheckCircle2 size={18} />
-              Ping sent! Check your channel.
-            </div>
-          {/if}
-          
-          <div class="flex justify-between mt-8 pt-4 border-t border-[#2A3241]">
-            <button class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 flex items-center gap-2 text-sm transition-colors" onclick={prevStep}>
-              <ArrowLeft size={18} /> Back
-            </button>
-            <button class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-2 flex items-center gap-2 text-sm transition-colors" onclick={nextStep}>
-              Next <ArrowRight size={18} />
-            </button>
-          </div>
-        </section>
-      {/if}
+					<div class="space-y-4">
+						<button
+							onclick={() => (backendChoice = 'global')}
+							class="w-full border bg-[#0B0E14] text-left {backendChoice === 'global'
+								? 'border-[#FF6B4A]'
+								: 'border-[#2A3241]'} flex items-start gap-4 rounded-xl p-4 transition-colors hover:border-[#FF6B4A]"
+						>
+							<div class="rounded-lg bg-[#151921] p-2 text-[#FF6B4A]">
+								<Globe size={24} />
+							</div>
+							<div>
+								<h3 class="mb-1 font-bold text-white">Global Drive (Quick Start)</h3>
+								<p class="text-xs text-gray-400">
+									Use the shared community node. Zero setup required, start uploading immediately.
+									Recommended for most users.
+								</p>
+							</div>
+						</button>
 
-      <!-- Step 4: Ready -->
-      {#if currentStep === 4}
-        <section class="text-center animate-[fadeIn_0.3s_ease]">
-          <div class="w-20 h-20 bg-[#FF6B4A]/10 rounded-full flex items-center justify-center mx-auto mb-6 mt-4 shadow-[0_0_30px_rgba(255,107,74,0.2)] border border-[#FF6B4A]/30">
-            <Rocket class="text-[#FF6B4A]" size={40} />
-          </div>
-          
-          <h2 class="text-2xl font-bold text-white mb-1">Engine Active</h2>
-          <p class="text-sm text-gray-400 mb-8">Your personal cloud is configured and ready to accept data.</p>
-          
-          <div class="bg-[#0B0E14] border border-[#2A3241] rounded-lg p-4 mb-8 flex flex-col items-center gap-2">
-            <div class="flex items-center gap-2 text-xs font-medium text-[#4edea3]">
-              <span class="relative flex h-3 w-3">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4edea3] opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-3 w-3 bg-[#4edea3]"></span>
-              </span>
-              Connection Established
-            </div>
-            <div class="text-sm font-medium text-white">Capacity: Unlimited (TG Backend)</div>
-            <div class="text-xs text-gray-400">Allocated: dynamically / Speed: Optimal</div>
-          </div>
-          
-          <div class="flex justify-between mt-8 pt-4 border-t border-[#2A3241]">
-            <button class="bg-transparent border border-[#2A3241] hover:bg-[#1E2430] text-white rounded-lg px-4 py-2 flex items-center gap-2 text-sm transition-colors" onclick={prevStep}>
-              <ArrowLeft size={18} /> Back
-            </button>
-            <button disabled={isLoading} onclick={submitOnboarding} class="bg-[#FF6B4A] hover:bg-[#FF8264] text-[#0B0E14] font-bold rounded-lg px-6 py-2 flex justify-center items-center gap-2 text-sm transition-colors disabled:opacity-50">
-              {isLoading ? 'Configuring System...' : 'Launch Drive'} <Rocket size={18} />
-            </button>
-          </div>
-        </section>
-      {/if}
-      
-    </div>
-  </main>
+						<!-- Inline Invite Code for Global -->
+						{#if backendChoice === 'global'}
+							<div class="ml-12 animate-[fadeIn_0.3s_ease]">
+								<label class="mb-1 block text-xs font-medium text-gray-400" for="inviteCode"
+									>Invitation Code (Optional)</label
+								>
+								<div class="group relative flex items-center">
+									<Gift
+										class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]"
+										size={20}
+									/>
+									<input
+										bind:value={inviteCode}
+										id="inviteCode"
+										class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+										placeholder="e.g. SHRIMP-123"
+										type="text"
+									/>
+								</div>
+								{#if inviteCodeError}
+									<p class="mt-1 text-xs text-red-400">{inviteCodeError}</p>
+								{/if}
+							</div>
+						{/if}
+
+						<button
+							onclick={() => (backendChoice = 'custom')}
+							class="w-full border bg-[#0B0E14] text-left {backendChoice === 'custom'
+								? 'border-[#FF6B4A]'
+								: 'border-[#2A3241]'} flex items-start gap-4 rounded-xl p-4 transition-colors hover:border-[#FF6B4A]"
+						>
+							<div class="rounded-lg bg-[#151921] p-2 text-[#FF6B4A]">
+								<Server size={24} />
+							</div>
+							<div>
+								<h3 class="mb-1 font-bold text-white">Custom Node (Self-Setup)</h3>
+								<p class="text-xs text-gray-400">
+									Configure your own private Telegram Bot and Channel. Requires technical knowledge
+									of Telegram's @BotFather.
+								</p>
+							</div>
+						</button>
+
+						<!-- Encryption Toggle for All -->
+						<div class="mt-6 border-t border-[#2A3241] pt-4">
+							<label class="flex cursor-pointer items-start gap-3">
+								<div class="relative flex items-center pt-1">
+									<input type="checkbox" bind:checked={enableEncryption} class="peer sr-only" />
+									<div
+										class="peer h-5 w-10 rounded-full bg-[#2A3241] peer-checked:bg-[#FF6B4A] peer-focus:outline-none after:absolute after:top-[6px] after:left-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"
+									></div>
+								</div>
+								<div>
+									<div class="text-sm font-bold text-white">
+										Enable Client-Side Encryption (Flexible)
+									</div>
+									<div class="mt-1 text-xs text-gray-400">
+										Encrypt your files before uploading. You can disable this later in settings.
+										<br /><span class="font-medium text-[#FF6B4A]"
+											>WARNING: If you lose your recovery key, your encrypted files cannot be
+											recovered.</span
+										>
+									</div>
+								</div>
+							</label>
+						</div>
+					</div>
+
+					<div class="mt-8 flex justify-end border-t border-[#2A3241] pt-4">
+						<button
+							class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-6 py-2 text-sm font-bold text-[#0B0E14] transition-colors hover:bg-[#FF8264] disabled:opacity-50"
+							onclick={nextStep}
+							disabled={isLoading}
+						>
+							{isLoading ? 'Verifying...' : 'Next'}
+							<ArrowRight size={18} />
+						</button>
+					</div>
+				</section>
+			{/if}
+
+			<!-- Step 2 (Custom): Bot Link -->
+			{#if currentStep === 2 && backendChoice === 'custom'}
+				<section class="animate-[fadeIn_0.3s_ease]">
+					<h2 class="mb-2 text-2xl font-bold text-white">Connect Telegram Bot</h2>
+					<p class="mb-6 text-sm text-gray-400">
+						Create a bot via @BotFather and paste the token here.
+					</p>
+
+					<div class="mb-4 rounded-lg border border-[#2A3241] bg-[#0B0E14] p-4">
+						<ol class="list-inside list-decimal space-y-2 text-sm text-gray-400">
+							<li>
+								Message <a
+									class="text-[#FF6B4A] hover:underline"
+									href="https://t.me/BotFather"
+									target="_blank">@BotFather</a
+								> on Telegram.
+							</li>
+							<li>
+								Send <code class="rounded border border-[#2A3241] bg-[#151921] px-1 text-xs"
+									>/newbot</code
+								> and follow prompts.
+							</li>
+							<li>Copy the HTTP API Token provided.</li>
+						</ol>
+					</div>
+
+					<div class="relative mb-4">
+						<label class="mb-1 block text-xs font-medium text-gray-400" for="bot-token"
+							>HTTP API Token</label
+						>
+						<div class="flex gap-2">
+							<div class="group relative flex flex-grow items-center">
+								<KeyRound
+									class="absolute left-3 {botVerified
+										? 'text-[#4edea3]'
+										: 'text-[#2A3241]'} transition-colors group-focus-within:text-[#FF6B4A]"
+									size={20}
+								/>
+								<input
+									bind:value={botToken}
+									class="w-full border bg-[#0B0E14] {botVerified
+										? 'border-[#4edea3]'
+										: 'border-[#2A3241]'} rounded-lg py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+									id="bot-token"
+									placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ"
+									type="text"
+								/>
+							</div>
+							<button
+								disabled={isLoading}
+								class="flex items-center gap-2 rounded-lg border border-[#2A3241] bg-transparent px-4 py-2 text-sm whitespace-nowrap text-white transition-colors hover:bg-[#1E2430] disabled:opacity-50"
+								onclick={verifyBot}
+							>
+								{isLoading ? 'Verifying...' : 'Verify'}
+							</button>
+						</div>
+					</div>
+
+					{#if botVerified}
+						<div
+							class="flex animate-[fadeIn_0.3s_ease] items-center gap-2 text-xs font-medium text-[#4edea3]"
+						>
+							<CheckCircle2 size={18} />
+							Bot successfully connected.
+						</div>
+					{/if}
+
+					<div class="mt-8 flex justify-between border-t border-[#2A3241] pt-4">
+						<button
+							class="flex items-center gap-2 rounded-lg border border-[#2A3241] bg-transparent px-4 py-2 text-sm text-white transition-colors hover:bg-[#1E2430]"
+							onclick={prevStep}
+						>
+							<ArrowLeft size={18} /> Back
+						</button>
+						<button
+							class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-6 py-2 text-sm font-bold text-[#0B0E14] transition-colors hover:bg-[#FF8264] disabled:opacity-50"
+							onclick={nextStep}
+							disabled={!botVerified}
+						>
+							Next <ArrowRight size={18} />
+						</button>
+					</div>
+				</section>
+			{/if}
+
+			<!-- Step 3 (Custom): Channel Link -->
+			{#if currentStep === 3 && backendChoice === 'custom'}
+				<section class="animate-[fadeIn_0.3s_ease]">
+					<h2 class="mb-2 text-2xl font-bold text-white">Storage Channel</h2>
+					<p class="mb-6 text-sm text-gray-400">
+						Create a private channel to act as your limitless storage drive and add your bot as an
+						admin.
+					</p>
+
+					<div class="mb-4 rounded-lg border border-[#2A3241] bg-[#0B0E14] p-4">
+						<ol class="list-inside list-decimal space-y-2 text-sm text-gray-400">
+							<li>Create a New Channel in Telegram.</li>
+							<li>Set it to <strong>Private</strong>.</li>
+							<li>Add the bot you just created as an <strong>Administrator</strong>.</li>
+							<li>
+								Forward a message from that channel to <a
+									class="text-[#FF6B4A] hover:underline"
+									href="https://t.me/userinfobot"
+									target="_blank">@userinfobot</a
+								> to get the ID.
+							</li>
+						</ol>
+					</div>
+
+					<div class="group relative mb-4">
+						<label class="mb-1 block text-xs font-medium text-gray-400" for="channel-id"
+							>Channel ID</label
+						>
+						<div class="flex gap-2">
+							<div class="relative flex flex-grow items-center">
+								<Hash
+									class="absolute left-3 {pingSuccess
+										? 'text-[#4edea3]'
+										: 'text-[#2A3241]'} transition-colors group-focus-within:text-[#FF6B4A]"
+									size={20}
+								/>
+								<input
+									bind:value={chatId}
+									id="channel-id"
+									class="w-full border bg-[#0B0E14] {pingSuccess
+										? 'border-[#4edea3]'
+										: 'border-[#2A3241]'} rounded-lg py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+									placeholder="-1001234567890"
+									type="text"
+								/>
+							</div>
+							<button
+								disabled={isLoading}
+								class="flex items-center gap-2 rounded-lg border border-[#2A3241] bg-transparent px-4 py-2 text-sm whitespace-nowrap text-white transition-colors hover:bg-[#1E2430] disabled:opacity-50"
+								onclick={testPing}
+							>
+								{isLoading ? 'Testing...' : 'Test Ping'}
+							</button>
+						</div>
+					</div>
+
+					{#if pingSuccess}
+						<div
+							class="flex animate-[fadeIn_0.3s_ease] items-center gap-2 text-xs font-medium text-[#4edea3]"
+						>
+							<CheckCircle2 size={18} />
+							Ping sent! Check your channel.
+						</div>
+					{/if}
+
+					<div class="mt-8 flex justify-between border-t border-[#2A3241] pt-4">
+						<button
+							class="flex items-center gap-2 rounded-lg border border-[#2A3241] bg-transparent px-4 py-2 text-sm text-white transition-colors hover:bg-[#1E2430]"
+							onclick={prevStep}
+						>
+							<ArrowLeft size={18} /> Back
+						</button>
+						<button
+							class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-6 py-2 text-sm font-bold text-[#0B0E14] transition-colors hover:bg-[#FF8264] disabled:opacity-50"
+							onclick={nextStep}
+							disabled={!pingSuccess}
+						>
+							Next <ArrowRight size={18} />
+						</button>
+					</div>
+				</section>
+			{/if}
+
+			<!-- Step 5: Setup Vault PIN (For Google Users) -->
+			{#if currentStep === 5}
+				<section class="animate-[fadeIn_0.3s_ease]">
+					<h2 class="mb-2 text-2xl font-bold text-white">Secure Your Vault</h2>
+					<p class="mb-6 text-sm text-gray-400">
+						Because you registered using a third-party provider, you must create a 6-digit PIN to secure your encryption key. 
+						<br /><span class="text-[#FF6B4A]">Do not forget this PIN, or you will lose access to your files.</span>
+					</p>
+
+					<div class="mb-4">
+						<label class="mb-1 block text-xs font-medium text-gray-400" for="vaultPin"
+							>Enter 6-Digit Vault PIN</label
+						>
+						<div class="group relative flex items-center">
+							<Lock
+								class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]"
+								size={20}
+							/>
+							<input
+								bind:value={vaultPin}
+								id="vaultPin"
+								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+								placeholder="e.g. 123456"
+								type="password"
+								inputmode="numeric"
+								minlength="6"
+							/>
+						</div>
+					</div>
+
+					<div class="mb-4">
+						<label class="mb-1 block text-xs font-medium text-gray-400" for="confirmPin"
+							>Confirm Vault PIN</label
+						>
+						<div class="group relative flex items-center">
+							<Lock
+								class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]"
+								size={20}
+							/>
+							<input
+								bind:value={confirmPin}
+								id="confirmPin"
+								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+								placeholder="Re-enter PIN"
+								type="password"
+								inputmode="numeric"
+								minlength="6"
+							/>
+						</div>
+					</div>
+
+					<div class="mt-8 flex justify-between border-t border-[#2A3241] pt-4">
+						<button
+							class="flex items-center gap-2 rounded-lg border border-[#2A3241] bg-transparent px-4 py-2 text-sm text-white transition-colors hover:bg-[#1E2430]"
+							onclick={prevStep}
+						>
+							<ArrowLeft size={18} /> Back
+						</button>
+						<button
+							class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] px-6 py-2 text-sm font-bold text-[#0B0E14] transition-colors hover:bg-[#FF8264]"
+							onclick={nextStep}
+						>
+							Next <ArrowRight size={18} />
+						</button>
+					</div>
+				</section>
+			{/if}
+
+			<!-- Step 4: Ready -->
+			{#if currentStep === 4}
+				<section class="animate-[fadeIn_0.3s_ease] text-center">
+					<div
+						class="mx-auto mt-4 mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[#FF6B4A]/30 bg-[#FF6B4A]/10 shadow-[0_0_30px_rgba(255,107,74,0.2)]"
+					>
+						<Rocket class="text-[#FF6B4A]" size={40} />
+					</div>
+
+					<h2 class="mb-1 text-2xl font-bold text-white">Engine Active</h2>
+					<p class="mb-8 text-sm text-gray-400">
+						Your personal cloud is configured and ready to accept data.
+					</p>
+
+					<div
+						class="mb-8 flex flex-col items-center gap-2 rounded-lg border border-[#2A3241] bg-[#0B0E14] p-4"
+					>
+						<div class="flex items-center gap-2 text-xs font-medium text-[#4edea3]">
+							<span class="relative flex h-3 w-3">
+								<span
+									class="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#4edea3] opacity-75"
+								></span>
+								<span class="relative inline-flex h-3 w-3 rounded-full bg-[#4edea3]"></span>
+							</span>
+							Connection Established ({backendChoice === 'global' ? 'Global Node' : 'Custom Node'})
+						</div>
+						<div class="text-sm font-medium text-white">
+							Capacity: {backendChoice === 'global' ? 'Shared Pool' : 'Unlimited (TG Backend)'}
+						</div>
+					</div>
+
+					<div class="mt-8 flex justify-between border-t border-[#2A3241] pt-4">
+						<button
+							class="flex items-center gap-2 rounded-lg border border-[#2A3241] bg-transparent px-4 py-2 text-sm text-white transition-colors hover:bg-[#1E2430]"
+							onclick={prevStep}
+						>
+							<ArrowLeft size={18} /> Back
+						</button>
+						<button
+							disabled={isLoading}
+							onclick={submitOnboarding}
+							class="flex items-center justify-center gap-2 rounded-lg bg-[#FF6B4A] px-6 py-2 text-sm font-bold text-[#0B0E14] transition-colors hover:bg-[#FF8264] disabled:opacity-50"
+						>
+							{isLoading ? 'Configuring System...' : 'Launch Drive'}
+							<Rocket size={18} />
+						</button>
+					</div>
+				</section>
+			{/if}
+		</div>
+	</main>
 </div>
 
 <style>
-  @keyframes fadeIn { 
-    from { opacity: 0; transform: translateY(10px); } 
-    to { opacity: 1; transform: translateY(0); } 
-  }
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
 </style>

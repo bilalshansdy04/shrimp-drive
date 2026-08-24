@@ -27,7 +27,7 @@ import fs from 'fs';
 
 async function getKuroshiro() {
 	if (kuroshiroInstance) return kuroshiroInstance;
-	
+
 	// Avoid multiple concurrent initializations
 	if (kuroshiroInitializing) {
 		while (kuroshiroInitializing) {
@@ -39,7 +39,7 @@ async function getKuroshiro() {
 	kuroshiroInitializing = true;
 	try {
 		const kuroshiro = new Kuroshiro();
-		
+
 		// Find the correct dictPath depending on the environment
 		let dictPath = path.join(process.cwd(), 'node_modules/kuromoji/dict');
 		if (!fs.existsSync(dictPath)) {
@@ -55,8 +55,8 @@ async function getKuroshiro() {
 		await kuroshiro.init(new KuromojiAnalyzer({ dictPath }));
 		kuroshiroInstance = kuroshiro;
 	} catch (e) {
-		console.error("Failed to initialize kuroshiro", e);
-		// Do not set to null silently if it failed to init due to dictionary error, 
+		console.error('Failed to initialize kuroshiro', e);
+		// Do not set to null silently if it failed to init due to dictionary error,
 		// otherwise we save Kanji as Romaji!
 	} finally {
 		kuroshiroInitializing = false;
@@ -65,14 +65,18 @@ async function getKuroshiro() {
 }
 
 // Regex to detect Japanese characters
-const hasJapanese = (str: string) => /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(str);
+const hasJapanese = (str: string) =>
+	/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(str);
 
 // Regex to detect Korean characters
 const hasKorean = (str: string) => /[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/.test(str);
 
-export async function transliterateLrc(lrcString: string, type: 'japanese' | 'korean'): Promise<string | null> {
+export async function transliterateLrc(
+	lrcString: string,
+	type: 'japanese' | 'korean'
+): Promise<string | null> {
 	const lines = lrcString.split('\n');
-	
+
 	if (type === 'japanese') {
 		const kuroshiro = await getKuroshiro();
 		if (!kuroshiro) return null; // Return null if init fails to prevent saving kanji as romaji
@@ -82,14 +86,18 @@ export async function transliterateLrc(lrcString: string, type: 'japanese' | 'ko
 				const timeMatch = line.match(/^(\[\d{2}:\d{2}(?:\.\d{1,3})?\])(.*)$/);
 				let timeTag = '';
 				let text = line.trim();
-				
+
 				if (timeMatch) {
 					timeTag = timeMatch[1] + ' ';
 					text = timeMatch[2].trim();
 				}
 
 				if (hasJapanese(text)) {
-					const romajiText = await kuroshiro.convert(text, { to: 'romaji', mode: 'spaced', romajiSystem: 'passport' });
+					const romajiText = await kuroshiro.convert(text, {
+						to: 'romaji',
+						mode: 'spaced',
+						romajiSystem: 'passport'
+					});
 					return `${timeTag}${romajiText}`.trim();
 				}
 				return line;
@@ -101,7 +109,7 @@ export async function transliterateLrc(lrcString: string, type: 'japanese' | 'ko
 			const timeMatch = line.match(/^(\[\d{2}:\d{2}(?:\.\d{1,3})?\])(.*)$/);
 			let timeTag = '';
 			let text = line.trim();
-			
+
 			if (timeMatch) {
 				timeTag = timeMatch[1] + ' ';
 				text = timeMatch[2].trim();
@@ -115,7 +123,7 @@ export async function transliterateLrc(lrcString: string, type: 'japanese' | 'ko
 		});
 		return convertedLines.join('\n');
 	}
-	
+
 	return lrcString;
 }
 
@@ -188,7 +196,8 @@ export async function resolveTrackLyrics(
 		}
 	}
 
-	await db.update(files)
+	await db
+		.update(files)
 		.set({
 			syncedLyrics: synced,
 			plainLyrics: plain,

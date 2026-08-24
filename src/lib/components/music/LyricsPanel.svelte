@@ -17,7 +17,7 @@
 	let isEditing = $state(false);
 	let editText = $state('');
 	let saving = $state(false);
-	
+
 	let isSearching = $state(false);
 	let searchQuery = $state('');
 	let searchResults = $state<any[]>([]);
@@ -25,8 +25,10 @@
 	let searchTimeout: any;
 
 	let currentTrackId = $derived(media.currentTrack?.id);
-	
-	let activeList = $derived(isRomajiMode && romajiLyricsList.length > 0 ? romajiLyricsList : lyricsList);
+
+	let activeList = $derived(
+		isRomajiMode && romajiLyricsList.length > 0 ? romajiLyricsList : lyricsList
+	);
 
 	let activeLineIndex = $derived.by(() => {
 		if (activeList.length === 0) return -1;
@@ -41,7 +43,7 @@
 
 	// Auto scroll logic
 	let container: HTMLElement;
-	
+
 	$effect(() => {
 		if (activeLineIndex >= 0 && container && !isEditing) {
 			const activeEl = container.querySelector(`[data-index="${activeLineIndex}"]`) as HTMLElement;
@@ -54,7 +56,9 @@
 	});
 
 	function formatTime(seconds: number) {
-		const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+		const m = Math.floor(seconds / 60)
+			.toString()
+			.padStart(2, '0');
 		const s = (seconds % 60).toFixed(2).padStart(5, '0');
 		return `${m}:${s}`;
 	}
@@ -63,7 +67,7 @@
 		isEditing = true;
 		isSearching = false;
 		if (lyricsList.length > 0) {
-			editText = lyricsList.map(l => `[${formatTime(l.time)}] ${l.text}`).join('\n');
+			editText = lyricsList.map((l) => `[${formatTime(l.time)}] ${l.text}`).join('\n');
 		} else if (plainLyrics) {
 			editText = plainLyrics;
 		} else {
@@ -168,7 +172,7 @@
 		romajiLyricsList = [];
 		plainLyrics = null;
 		isEditing = false;
-		
+
 		try {
 			const res = await fetch(`/api/files/${id}/lyrics`);
 			if (res.ok) {
@@ -179,7 +183,7 @@
 					romanizedType = data.romanizedType || null;
 					if (data.syncedLyrics) {
 						lyricsList = parseLrc(data.syncedLyrics);
-					} 
+					}
 					if (data.romajiLyrics) {
 						romajiLyricsList = parseLrc(data.romajiLyrics);
 					}
@@ -212,38 +216,44 @@
 </script>
 
 <div class="flex h-full w-full flex-col overflow-hidden bg-[#0B0E14] p-6 text-white">
-	<div class="mb-6 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+	<div class="mb-6 flex shrink-0 flex-col justify-between gap-4 sm:flex-row sm:items-center">
 		<div>
 			<h2 class="text-xl font-bold">Lyrics</h2>
 			{#if status === 'found'}
 				<div class="flex items-center gap-3">
 					<p class="text-xs text-gray-500 capitalize">Source: {lyricsSource}</p>
 					{#if !isEditing}
-						<button class="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors" onclick={startEditing} title="Edit Lyrics">
+						<button
+							class="flex items-center gap-1 text-xs text-gray-400 transition-colors hover:text-white"
+							onclick={startEditing}
+							title="Edit Lyrics"
+						>
 							<Edit3 size={12} /> Edit
 						</button>
 					{/if}
 				</div>
 			{/if}
 		</div>
-		
+
 		{#if romajiLyricsList.length > 0 && romanizedType}
-			<div class="flex w-full sm:w-auto items-center rounded-lg bg-[#151921] p-1 border border-[#2A3241]">
-				<button 
-					class="flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors"
+			<div
+				class="flex w-full items-center rounded-lg border border-[#2A3241] bg-[#151921] p-1 sm:w-auto"
+			>
+				<button
+					class="flex-1 rounded-md px-3 py-1 text-xs font-medium transition-colors"
 					class:bg-[#2A3241]={!isRomajiMode}
 					class:text-white={!isRomajiMode}
 					class:text-gray-400={isRomajiMode}
-					onclick={() => isRomajiMode = false}
+					onclick={() => (isRomajiMode = false)}
 				>
 					Original
 				</button>
-				<button 
-					class="flex-1 px-3 py-1 text-xs font-medium rounded-md transition-colors"
+				<button
+					class="flex-1 rounded-md px-3 py-1 text-xs font-medium transition-colors"
 					class:bg-[#2A3241]={isRomajiMode}
 					class:text-white={isRomajiMode}
 					class:text-gray-400={!isRomajiMode}
-					onclick={() => isRomajiMode = true}
+					onclick={() => (isRomajiMode = true)}
 				>
 					{romanizedType === 'romaji' ? 'Romaji' : 'Romanized'}
 				</button>
@@ -251,24 +261,24 @@
 		{/if}
 	</div>
 
-	<div 
+	<div
 		bind:this={container}
-		class="relative flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-32"
+		class="no-scrollbar relative flex-1 overflow-y-auto scroll-smooth pb-32"
 	>
 		{#if isSearching}
 			<div class="flex h-full flex-col">
 				<div class="mb-4 flex items-center gap-3">
 					<div class="relative flex-1">
-						<Search size={16} class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-						<input 
-							type="text" 
+						<Search size={16} class="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
+						<input
+							type="text"
 							bind:value={searchQuery}
 							oninput={handleSearchInput}
 							placeholder="Search track or artist..."
-							class="w-full rounded-md border border-[#2A3241] bg-[#151921] py-2 pl-9 pr-4 text-sm text-white placeholder-gray-500 focus:border-[#FF6B4A] focus:outline-none focus:ring-1 focus:ring-[#FF6B4A]"
+							class="w-full rounded-md border border-[#2A3241] bg-[#151921] py-2 pr-4 pl-9 text-sm text-white placeholder-gray-500 focus:border-[#FF6B4A] focus:ring-1 focus:ring-[#FF6B4A] focus:outline-none"
 						/>
 					</div>
-					<button 
+					<button
 						class="rounded-md px-4 py-2 text-sm font-medium text-gray-400 transition-colors hover:text-white"
 						onclick={() => {
 							isSearching = false;
@@ -282,7 +292,9 @@
 						Cancel
 					</button>
 				</div>
-				<div class="flex-1 overflow-y-auto rounded-lg border border-[#2A3241] bg-[#151921] p-2 no-scrollbar">
+				<div
+					class="no-scrollbar flex-1 overflow-y-auto rounded-lg border border-[#2A3241] bg-[#151921] p-2"
+				>
 					{#if searchLoading}
 						<div class="flex h-32 items-center justify-center">
 							<Loader2 size={24} class="animate-spin text-[#FF6B4A]" />
@@ -294,16 +306,22 @@
 					{:else}
 						<div class="space-y-1">
 							{#each searchResults as result}
-								<button 
+								<button
 									class="flex w-full flex-col items-start rounded-md p-3 text-left transition-colors hover:bg-[#2A3241]"
 									onclick={() => selectSearchResult(result)}
 								>
 									<div class="flex w-full items-center justify-between">
-										<span class="font-medium text-white line-clamp-1">{result.trackName}</span>
+										<span class="line-clamp-1 font-medium text-white">{result.trackName}</span>
 										{#if result.syncedLyrics}
-											<span class="shrink-0 rounded bg-green-500/20 px-1.5 py-0.5 text-[10px] font-medium text-green-400">Synced LRC</span>
+											<span
+												class="shrink-0 rounded bg-green-500/20 px-1.5 py-0.5 text-[10px] font-medium text-green-400"
+												>Synced LRC</span
+											>
 										{:else}
-											<span class="shrink-0 rounded bg-gray-500/20 px-1.5 py-0.5 text-[10px] font-medium text-gray-400">Plain Text</span>
+											<span
+												class="shrink-0 rounded bg-gray-500/20 px-1.5 py-0.5 text-[10px] font-medium text-gray-400"
+												>Plain Text</span
+											>
 										{/if}
 									</div>
 									<div class="mt-1 flex items-center gap-2 text-xs text-gray-400">
@@ -321,12 +339,11 @@
 			<div class="flex h-full flex-col">
 				<textarea
 					bind:value={editText}
-					class="w-full flex-1 resize-none rounded-lg border border-[#2A3241] bg-[#151921] p-4 text-sm font-mono text-gray-300 focus:border-[#FF6B4A] focus:outline-none focus:ring-1 focus:ring-[#FF6B4A]"
+					class="w-full flex-1 resize-none rounded-lg border border-[#2A3241] bg-[#151921] p-4 font-mono text-sm text-gray-300 focus:border-[#FF6B4A] focus:ring-1 focus:ring-[#FF6B4A] focus:outline-none"
 					placeholder="Paste LRC format lyrics here...&#10;[00:12.34] Example line 1&#10;[00:15.67] Example line 2&#10;&#10;Or plain text without time tags."
-					disabled={saving}
-				></textarea>
+					disabled={saving}></textarea>
 				<div class="mt-4 flex items-center justify-between gap-4">
-					<button 
+					<button
 						class="rounded-md border border-red-900/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/20 disabled:opacity-50"
 						onclick={clearLyrics}
 						disabled={saving}
@@ -334,7 +351,7 @@
 						Remove Lyrics
 					</button>
 					<div class="flex gap-3">
-						<button 
+						<button
 							class="flex items-center justify-center rounded-md border border-[#2A3241] bg-[#151921] px-3 py-2 text-gray-300 transition-colors hover:bg-[#1A202A] hover:text-white disabled:opacity-50"
 							onclick={startSearch}
 							disabled={saving}
@@ -342,14 +359,14 @@
 						>
 							<Search size={16} />
 						</button>
-						<button 
+						<button
 							class="rounded-md px-4 py-2 text-sm font-medium text-gray-400 transition-colors hover:text-white disabled:opacity-50"
-							onclick={() => isEditing = false}
+							onclick={() => (isEditing = false)}
 							disabled={saving}
 						>
 							Cancel
 						</button>
-						<button 
+						<button
 							class="flex items-center gap-2 rounded-md bg-[#FF6B4A] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#ff5733] disabled:opacity-50"
 							onclick={saveLyrics}
 							disabled={saving}
@@ -373,9 +390,9 @@
 					{#each activeList as line, index}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div 
+						<div
 							data-index={index}
-							class="cursor-pointer text-xl sm:text-2xl font-bold transition-all duration-300 hover:text-white"
+							class="cursor-pointer text-xl font-bold transition-all duration-300 hover:text-white sm:text-2xl"
 							class:text-[#FF6B4A]={index === activeLineIndex}
 							class:opacity-100={index === activeLineIndex}
 							class:text-gray-500={index !== activeLineIndex}
@@ -387,14 +404,14 @@
 					{/each}
 				</div>
 			{:else if plainLyrics}
-				<div class="whitespace-pre-wrap text-lg font-medium leading-relaxed text-gray-300">
+				<div class="text-lg leading-relaxed font-medium whitespace-pre-wrap text-gray-300">
 					{plainLyrics}
 				</div>
 			{/if}
 		{:else if status === 'not_found'}
 			<div class="flex h-full flex-col items-center justify-center text-center">
-				<div class="mb-6 relative">
-					<div class="absolute -inset-4 rounded-full bg-[#FF6B4A]/10 animate-pulse"></div>
+				<div class="relative mb-6">
+					<div class="absolute -inset-4 animate-pulse rounded-full bg-[#FF6B4A]/10"></div>
 					<Disc size={64} class="text-gray-600" />
 				</div>
 				<h3 class="mb-2 text-xl font-semibold text-white">Lyrics not available</h3>
@@ -402,13 +419,13 @@
 					We couldn't find synced lyrics for this track automatically.
 				</p>
 				<div class="flex items-center gap-3">
-					<button 
+					<button
 						class="flex items-center gap-2 rounded-full bg-[#FF6B4A] px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-[#ff5733]"
 						onclick={startSearch}
 					>
 						<Search size={16} /> Search Online
 					</button>
-					<button 
+					<button
 						class="flex items-center gap-2 rounded-full border border-[#2A3241] bg-[#151921] px-6 py-3 text-sm font-medium transition-colors hover:bg-[#1A202A]"
 						onclick={startEditing}
 					>
@@ -428,7 +445,7 @@
 
 	/* Hide scrollbar for IE, Edge and Firefox */
 	.no-scrollbar {
-		-ms-overflow-style: none;  /* IE and Edge */
-		scrollbar-width: none;  /* Firefox */
+		-ms-overflow-style: none; /* IE and Edge */
+		scrollbar-width: none; /* Firefox */
 	}
 </style>

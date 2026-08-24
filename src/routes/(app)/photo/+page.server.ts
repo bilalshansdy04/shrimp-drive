@@ -13,11 +13,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.select()
 		.from(files)
 		.where(
-			and(
-				eq(files.userId, locals.user.id),
-				eq(files.fileType, 'image'),
-				isNull(files.deletedAt)
-			)
+			and(eq(files.userId, locals.user.id), eq(files.fileType, 'image'), isNull(files.deletedAt))
 		)
 		.orderBy(desc(files.createdAt));
 

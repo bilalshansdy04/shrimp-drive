@@ -14,6 +14,7 @@
 	import { pushState, replaceState } from '$app/navigation';
 	import type { PageData } from './$types';
 	import { toast } from 'svelte-sonner';
+	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
 
 	const { data }: { data: PageData } = $props();
 	const photoFiles = $derived(data.photoFiles);
@@ -25,6 +26,7 @@
 	// Lightbox state
 	let lightboxIndex = $state<number | null>(null);
 	let highResLoaded = $state(false);
+	let highResSrc = $state<string | undefined>(undefined);
 	const selectedPhoto = $derived(lightboxIndex !== null ? photoFiles[lightboxIndex] : null);
 
 	onMount(() => {
@@ -50,9 +52,20 @@
 	$effect(() => {
 		if (lightboxIndex !== null) {
 			highResLoaded = false;
+			highResSrc = undefined;
 			replaceState(`?view=${photoFiles[lightboxIndex].id}`, { view: photoFiles[lightboxIndex].id });
+
+			// Load and decrypt high-res photo if needed
+			let cancelled = false;
+			media.loadTrack(photoFiles[lightboxIndex]).then((src) => {
+				if (!cancelled) highResSrc = src || undefined;
+			});
+			return () => {
+				cancelled = true;
+			};
 		} else {
 			replaceState('?', {});
+			highResSrc = undefined;
 		}
 	});
 
@@ -70,12 +83,10 @@
 	}
 
 	function downloadFile(id: string) {
-		const link = document.createElement('a');
-		link.href = `/api/files/${id}/download`;
-		link.download = '';
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+		const photo = photoFiles.find((p) => p.id === id);
+		if (photo) {
+			downloadFileClient(photo);
+		}
 	}
 
 	function downloadSelected() {
@@ -158,7 +169,7 @@
 			}
 			const diffX = Math.abs(currentX - startX);
 			const diffY = Math.abs(currentY - startY);
-			
+
 			if (diffX > 10 || diffY > 10) {
 				clearTimeout(timer);
 			}
@@ -199,10 +210,13 @@
 				<div class="flex items-center gap-2">
 					<button
 						onclick={toggleSelectionMode}
-						class="flex items-center gap-2 rounded-lg border {selectionMode ? 'border-[#FF6B4A] bg-[#FF6B4A]/10 text-[#FF6B4A]' : 'border-[#2A3241] bg-[#151921] text-gray-400 hover:bg-[#1E2430] hover:text-white'} px-3 py-2 text-sm font-medium transition-colors"
+						class="flex items-center gap-2 rounded-lg border {selectionMode
+							? 'border-[#FF6B4A] bg-[#FF6B4A]/10 text-[#FF6B4A]'
+							: 'border-[#2A3241] bg-[#151921] text-gray-400 hover:bg-[#1E2430] hover:text-white'} px-3 py-2 text-sm font-medium transition-colors"
 						title={selectionMode ? 'Cancel Selection' : 'Select Items'}
 					>
-						<Check size={16} /> <span class="hidden sm:inline">{selectionMode ? 'Cancel' : 'Select'}</span>
+						<Check size={16} />
+						<span class="hidden sm:inline">{selectionMode ? 'Cancel' : 'Select'}</span>
 					</button>
 					<button
 						onclick={() => (viewMode = viewMode === 'list' ? 'grid' : 'list')}
@@ -299,7 +313,9 @@
 							class="h-auto w-full object-cover transition-transform duration-500 group-hover:scale-105"
 							onerror={(e) => {
 								if (photo.isEncrypted) {
-									toast.error('File video rusak atau kunci dekripsi tidak cocok. Disarankan hapus file dan upload ulang');
+									toast.error(
+										'File video rusak atau kunci dekripsi tidak cocok. Disarankan hapus file dan upload ulang'
+									);
 								}
 								// Hide broken image icon
 								(e.currentTarget as HTMLImageElement).style.display = 'none';
@@ -308,10 +324,16 @@
 
 						<!-- Hover Overlay / Action -->
 						{#if !selectionMode}
-							<div class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-100 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100"></div>
-							
-							<div class="absolute bottom-0 left-0 right-0 z-10 flex items-end justify-between p-3 opacity-100 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100">
-								<p class="pointer-events-none mr-2 truncate text-sm font-medium text-white drop-shadow-md">
+							<div
+								class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-100 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100"
+							></div>
+
+							<div
+								class="absolute right-0 bottom-0 left-0 z-10 flex items-end justify-between p-3 opacity-100 transition-opacity duration-300 sm:opacity-0 sm:group-hover:opacity-100"
+							>
+								<p
+									class="pointer-events-none mr-2 truncate text-sm font-medium text-white drop-shadow-md"
+								>
 									{photo.fileName}
 								</p>
 								<button
@@ -535,11 +557,11 @@
 			{/if}
 
 			<img
-				src={`/api/files/${selectedPhoto.id}/download`}
+				src={highResSrc}
 				alt={selectedPhoto.fileName}
 				onload={() => (highResLoaded = true)}
 				onerror={(e) => {
-					if (selectedPhoto.isEncrypted) {
+					if (selectedPhoto.isEncrypted && highResSrc) {
 						toast.error('File rusak atau kunci dekripsi tidak cocok');
 					}
 					// Show broken image state
@@ -564,15 +586,16 @@
 					<div class="text-sm text-gray-300">
 						{formatDate(selectedPhoto.createdAt)}
 					</div>
-					<a
-						href={`/api/files/${selectedPhoto.id}/download`}
-						download={selectedPhoto.fileName}
+					<button
+						onclick={(e) => {
+							e.stopPropagation();
+							downloadFile(selectedPhoto.id);
+						}}
 						class="ml-2 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
 						title="Download High-Res"
-						onclick={(e) => e.stopPropagation()}
 					>
 						<Download size={16} />
-					</a>
+					</button>
 				</div>
 			</div>
 		</div>

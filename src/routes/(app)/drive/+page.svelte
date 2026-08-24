@@ -22,7 +22,7 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
-	import { media } from '$lib/client/mediaState.svelte';
+	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -222,7 +222,9 @@
 	{/if}
 
 	<!-- Header & Storage Stats -->
-	<div class="mb-8 flex items-center gap-4 rounded-2xl border border-[#2A3241] bg-[#151921] p-4 md:gap-6 md:p-6">
+	<div
+		class="mb-8 flex items-center gap-4 rounded-2xl border border-[#2A3241] bg-[#151921] p-4 md:gap-6 md:p-6"
+	>
 		<div class="relative flex h-16 w-16 shrink-0 items-center justify-center">
 			<svg class="h-full w-full -rotate-90 transform" viewBox="0 0 36 36">
 				<path
@@ -311,7 +313,11 @@
 					<div
 						class="group hover:border-primary-container relative flex items-center gap-3 rounded-xl border border-[#2A3241] bg-[#151921] p-4 transition-all hover:bg-[#1A202A]"
 					>
-						<a href={`/drive?folder=${folder.id}`} class="absolute inset-0 z-10" aria-label={`Open folder ${folder.name}`}></a>
+						<a
+							href={`/drive?folder=${folder.id}`}
+							class="absolute inset-0 z-10"
+							aria-label={`Open folder ${folder.name}`}
+						></a>
 						<Folder size={24} class="shrink-0 text-blue-500" />
 						<div class="min-w-0 flex-1">
 							<p class="truncate font-medium text-white" title={folder.name}>{folder.name}</p>
@@ -377,13 +383,29 @@
 						class="group hover:border-primary-container relative flex items-center justify-between rounded-xl border border-[#2A3241] bg-[#151921] p-4 transition-all hover:bg-[#1A202A]"
 					>
 						{#if file.fileType === 'audio'}
-							<button onclick={() => media.playTrack(0, [file])} class="absolute inset-0 z-10" aria-label={`Play ${file.fileName}`}></button>
+							<button
+								onclick={() => media.playTrack(0, [file])}
+								class="absolute inset-0 z-10"
+								aria-label={`Play ${file.fileName}`}
+							></button>
 						{:else if file.fileType === 'video'}
-							<a href={`/video/${file.id}`} class="absolute inset-0 z-10" aria-label={`View ${file.fileName}`}></a>
+							<a
+								href={`/video/${file.id}`}
+								class="absolute inset-0 z-10"
+								aria-label={`View ${file.fileName}`}
+							></a>
 						{:else if file.fileType === 'photo' || file.fileType === 'image'}
-							<a href={`/photo?view=${file.id}`} class="absolute inset-0 z-10" aria-label={`View ${file.fileName}`}></a>
+							<a
+								href={`/photo?view=${file.id}`}
+								class="absolute inset-0 z-10"
+								aria-label={`View ${file.fileName}`}
+							></a>
 						{:else}
-							<a href={`/api/files/${file.id}/download`} target="_blank" class="absolute inset-0 z-10" aria-label={`Download ${file.fileName}`}></a>
+							<button
+								onclick={() => downloadFileClient(file)}
+								class="absolute inset-0 z-10"
+								aria-label={`Download ${file.fileName}`}
+							></button>
 						{/if}
 						<div class="flex min-w-0 flex-1 items-center gap-4">
 							<div
@@ -406,13 +428,21 @@
 						<div class="flex shrink-0 items-center gap-2">
 							<!-- Direct file actions (visual only, handled by absolute overlay) -->
 							{#if file.fileType === 'audio'}
-								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white"><Play size={18} /></div>
+								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white">
+									<Play size={18} />
+								</div>
 							{:else if file.fileType === 'video'}
-								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white"><Play size={18} /></div>
+								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white">
+									<Play size={18} />
+								</div>
 							{:else if file.fileType === 'photo' || file.fileType === 'image'}
-								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white"><Eye size={18} /></div>
+								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white">
+									<Eye size={18} />
+								</div>
 							{:else}
-								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white"><Eye size={18} /></div>
+								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white">
+									<Eye size={18} />
+								</div>
 							{/if}
 
 							<!-- File Menu -->

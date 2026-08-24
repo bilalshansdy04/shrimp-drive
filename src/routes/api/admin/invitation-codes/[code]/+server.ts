@@ -25,7 +25,10 @@ export const PATCH: RequestHandler = async ({ request, params }) => {
 		throw error(400, 'No valid fields provided for update');
 	}
 
-	const existingCode = await db.select().from(invitationCodes).where(eq(invitationCodes.code, params.code));
+	const existingCode = await db
+		.select()
+		.from(invitationCodes)
+		.where(eq(invitationCodes.code, params.code));
 	if (existingCode.length === 0) {
 		throw error(404, 'Invitation code not found');
 	}
@@ -50,19 +53,25 @@ export const PATCH: RequestHandler = async ({ request, params }) => {
 	}
 
 	return json(updatedCode[0]);
-}
+};
 
 export const DELETE: RequestHandler = async ({ request, params }) => {
 	requireAdminAuth(request);
 
-	const existingCode = await db.select().from(invitationCodes).where(eq(invitationCodes.code, params.code));
+	const existingCode = await db
+		.select()
+		.from(invitationCodes)
+		.where(eq(invitationCodes.code, params.code));
 	if (existingCode.length === 0) {
 		throw error(404, 'Invitation code not found');
 	}
 
 	// Find affected bonuses to update users' storage limit
-	const affectedBonuses = await db.select().from(storageBonuses).where(eq(storageBonuses.invitationCodeId, existingCode[0].id));
-	
+	const affectedBonuses = await db
+		.select()
+		.from(storageBonuses)
+		.where(eq(storageBonuses.invitationCodeId, existingCode[0].id));
+
 	for (const bonus of affectedBonuses) {
 		if (bonus.userId) {
 			// Instead of manual math, just call the recalculate helper AFTER deleting the bonus.
@@ -71,7 +80,9 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
 		}
 	}
 
-	const userIdsToRecalculate = [...new Set(affectedBonuses.map(b => b.userId).filter(Boolean))] as string[];
+	const userIdsToRecalculate = [
+		...new Set(affectedBonuses.map((b) => b.userId).filter(Boolean))
+	] as string[];
 
 	// This will cascade delete the storage_bonuses rows due to foreign key
 	const deletedCode = await db
@@ -85,4 +96,4 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
 	}
 
 	return json({ success: true, deletedCode: params.code });
-}
+};

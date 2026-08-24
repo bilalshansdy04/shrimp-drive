@@ -17,9 +17,9 @@
 	let isPaused = $state(false); // Autoplay is true, so initially not paused? Wait, video starts playing if possible.
 	let volume = $state(1);
 
-	let displayDuration = $derived(
-		duration && !isNaN(duration) ? duration : videoFile.duration
-	);
+	let displayDuration = $derived(duration && !isNaN(duration) ? duration : videoFile.duration);
+
+	let videoSrc = $state<string | undefined>(undefined);
 
 	function formatTime(seconds: number | null) {
 		if (!seconds || isNaN(seconds)) return '0:00';
@@ -32,6 +32,20 @@
 		// Pause any globally playing music when opening a video
 		if (!media.isPaused) {
 			media.isPaused = true;
+		}
+	});
+
+	$effect(() => {
+		if (videoFile) {
+			let cancelled = false;
+			media.loadTrack(videoFile).then((src) => {
+				if (!cancelled) videoSrc = src || undefined;
+			});
+			return () => {
+				cancelled = true;
+			};
+		} else {
+			videoSrc = undefined;
 		}
 	});
 
@@ -56,20 +70,25 @@
 	}
 </script>
 
-<div class="group relative flex h-full flex-col bg-[#0B0E14] overflow-hidden rounded-xl" bind:this={containerElement}>
+<div
+	class="group relative flex h-full flex-col overflow-hidden rounded-xl bg-[#0B0E14]"
+	bind:this={containerElement}
+>
 	<!-- Header -->
 	<div
-		class="absolute left-0 right-0 top-0 z-10 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+		class="absolute top-0 right-0 left-0 z-10 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
 	>
 		<a
 			href="/video"
 			class="rounded-full bg-black/40 p-2 text-white backdrop-blur-md transition-colors hover:bg-black/60"
-			onclick={() => { isPaused = true; }}
+			onclick={() => {
+				isPaused = true;
+			}}
 		>
 			<ArrowLeft size={20} />
 		</a>
 		<div class="min-w-0 flex-1">
-			<h1 class="truncate text-lg font-bold text-white drop-shadow-md shadow-black">
+			<h1 class="truncate text-lg font-bold text-white shadow-black drop-shadow-md">
 				{videoFile.title || videoFile.fileName}
 			</h1>
 		</div>
@@ -82,39 +101,45 @@
 		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<video
 			bind:this={videoElement}
-			bind:currentTime={currentTime}
-			bind:duration={duration}
+			bind:currentTime
+			bind:duration
 			bind:paused={isPaused}
-			bind:volume={volume}
-			src={`/api/files/${videoFile.id}/download`}
+			bind:volume
+			src={videoSrc}
 			class="h-full w-full object-contain"
 			autoplay
-			onclick={() => isPaused = !isPaused}
-			onwaiting={() => isBuffering = true}
-			onplaying={() => isBuffering = false}
-			oncanplay={() => isBuffering = false}
-			onpause={() => isBuffering = false}
-			onloadeddata={() => isBuffering = false}
+			onclick={() => (isPaused = !isPaused)}
+			onwaiting={() => (isBuffering = true)}
+			onplaying={() => (isBuffering = false)}
+			oncanplay={() => (isBuffering = false)}
+			onpause={() => (isBuffering = false)}
+			onloadeddata={() => (isBuffering = false)}
 			onerror={() => {
-				if (videoFile.isEncrypted) {
-					toast.error('File video rusak atau kunci dekripsi tidak cocok. Disarankan hapus file dan upload ulang');
+				if (videoFile.isEncrypted && videoSrc) {
+					toast.error(
+						'File video rusak atau kunci dekripsi tidak cocok. Disarankan hapus file dan upload ulang'
+					);
 				}
 			}}
 		></video>
 
 		{#if isBuffering}
-			<div class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50">
-				<div class="h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-primary-container shadow-lg"></div>
+			<div
+				class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50"
+			>
+				<div
+					class="border-t-primary-container h-12 w-12 animate-spin rounded-full border-4 border-white/20 shadow-lg"
+				></div>
 			</div>
 		{/if}
 
 		<!-- Custom Controls Overlay -->
 		<div
-			class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+			class="absolute right-0 bottom-0 left-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-4 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
 		>
 			<!-- Progress Bar -->
 			<div class="mb-4 flex items-center gap-3">
-				<span class="w-12 font-mono text-sm text-white text-right">{formatTime(currentTime)}</span>
+				<span class="w-12 text-right font-mono text-sm text-white">{formatTime(currentTime)}</span>
 				<input
 					type="range"
 					min="0"
@@ -134,7 +159,7 @@
 				<div class="flex items-center gap-6">
 					<button
 						class="hover:text-primary-container text-white transition-colors"
-						onclick={() => isPaused = !isPaused}
+						onclick={() => (isPaused = !isPaused)}
 					>
 						{#if isPaused}
 							<Play size={28} fill="currentColor" />

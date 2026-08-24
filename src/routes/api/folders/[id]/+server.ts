@@ -28,10 +28,7 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
 			return json({ error: 'Folder not found' }, { status: 404 });
 		}
 
-		await db
-			.update(folders)
-			.set({ name })
-			.where(eq(folders.id, folderId));
+		await db.update(folders).set({ name }).where(eq(folders.id, folderId));
 
 		return json({ success: true, name });
 	} catch (e) {
@@ -60,16 +57,10 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		const now = new Date();
 
 		// Soft delete the folder itself
-		await db
-			.update(folders)
-			.set({ deletedAt: now })
-			.where(eq(folders.id, folderId));
+		await db.update(folders).set({ deletedAt: now }).where(eq(folders.id, folderId));
 
 		// Soft delete all child files
-		await db
-			.update(files)
-			.set({ deletedAt: now })
-			.where(eq(files.folderId, folderId));
+		await db.update(files).set({ deletedAt: now }).where(eq(files.folderId, folderId));
 
 		// Note: To properly cascade soft-delete to deeply nested descendants
 		// we use a recursive CTE
@@ -86,7 +77,7 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 
 		// LibSQL returns rows in descendantsResult
 		const descendantFolderIds = descendantsResult.map((row: any) => row.id as string);
-		
+
 		if (descendantFolderIds.length > 0) {
 			for (const id of descendantFolderIds) {
 				await db.update(folders).set({ deletedAt: now }).where(eq(folders.id, id));

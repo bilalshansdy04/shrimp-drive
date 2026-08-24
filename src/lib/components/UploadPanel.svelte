@@ -6,14 +6,19 @@
 </script>
 
 {#if uploadState.isOpen}
-	<div class="fixed bottom-6 right-6 z-50 w-[350px] overflow-hidden rounded-xl border border-[#2A3241] bg-[#151921] shadow-2xl transition-all duration-300 ease-in-out">
+	<div
+		class="fixed right-6 bottom-6 z-50 w-[350px] overflow-hidden rounded-xl border border-[#2A3241] bg-[#151921] shadow-2xl transition-all duration-300 ease-in-out"
+	>
 		<!-- Header -->
 		<div class="flex items-center justify-between bg-[#1A202A] px-4 py-3">
 			<div class="flex flex-col">
-				<span class="font-semibold text-white flex items-center gap-2">
+				<span class="flex items-center gap-2 font-semibold text-white">
 					Uploading {uploadState.totalItems} item{uploadState.totalItems !== 1 ? 's' : ''}
 					{#if uploadState.isRateLimited}
-						<span class="text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full animate-pulse">Paused (Rate Limit)</span>
+						<span
+							class="animate-pulse rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-500"
+							>Paused (Rate Limit)</span
+						>
 					{/if}
 				</span>
 				<span class="text-xs text-gray-400">
@@ -74,14 +79,24 @@
 									{/if}
 								</span>
 							</div>
-							
+
 							{#if item.status === 'conflict'}
 								<!-- Check if it is waiting for others or ready to resolve -->
 								<!-- Actually, we can just show the buttons immediately, but wait until uploadQueue is free if we want? The user asked to show after others finish. But the state naturally waits in conflict because processUploadQueue skips conflicts! So we can just show the buttons. They won't upload until clicked. -->
 								<div class="mt-2 flex items-center gap-1.5">
-									<button class="flex-1 rounded border border-gray-600 bg-gray-700/50 py-1 text-[10px] font-medium text-gray-200 transition-colors hover:bg-gray-600 hover:text-white" onclick={() => uploadState.resolveConflict(item.id, 'skip')}>Skip</button>
-									<button class="flex-1 rounded border border-blue-600/50 bg-blue-600/20 py-1 text-[10px] font-medium text-blue-400 transition-colors hover:bg-blue-600 hover:text-white" onclick={() => uploadState.resolveConflict(item.id, 'continue')}>Keep Both</button>
-									<button class="flex-1 rounded border border-red-600/50 bg-red-600/20 py-1 text-[10px] font-medium text-red-400 transition-colors hover:bg-red-600 hover:text-white" onclick={() => uploadState.resolveConflict(item.id, 'replace')}>Replace</button>
+									<button
+										class="flex-1 rounded border border-gray-600 bg-gray-700/50 py-1 text-[10px] font-medium text-gray-200 transition-colors hover:bg-gray-600 hover:text-white"
+										onclick={() => uploadState.resolveConflict(item.id, 'skip')}>Skip</button
+									>
+									<button
+										class="flex-1 rounded border border-blue-600/50 bg-blue-600/20 py-1 text-[10px] font-medium text-blue-400 transition-colors hover:bg-blue-600 hover:text-white"
+										onclick={() => uploadState.resolveConflict(item.id, 'continue')}
+										>Keep Both</button
+									>
+									<button
+										class="flex-1 rounded border border-red-600/50 bg-red-600/20 py-1 text-[10px] font-medium text-red-400 transition-colors hover:bg-red-600 hover:text-white"
+										onclick={() => uploadState.resolveConflict(item.id, 'replace')}>Replace</button
+									>
 								</div>
 							{/if}
 						</div>
@@ -93,7 +108,7 @@
 							{:else if item.status === 'conflict'}
 								<AlertCircle size={18} class="text-amber-500" />
 							{:else if item.status === 'queued_for_sending' || item.status === 'cooldown' || item.status === 'wait_send'}
-								<div class="h-4 w-4 rounded-full border-2 border-gray-500 border-dashed"></div>
+								<div class="h-4 w-4 rounded-full border-2 border-dashed border-gray-500"></div>
 							{:else if item.status === 'sending'}
 								<Loader2 size={18} class="animate-spin text-blue-400" />
 							{:else if item.status === 'extracting_thumb' || item.status === 'uploading'}
@@ -125,8 +140,8 @@
 							{/if}
 
 							{#if item.status !== 'completed'}
-								<button 
-									class="text-gray-500 hover:text-white transition-colors"
+								<button
+									class="text-gray-500 transition-colors hover:text-white"
 									onclick={() => uploadState.cancelItem(item.id)}
 									title="Cancel"
 								>

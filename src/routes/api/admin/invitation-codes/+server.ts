@@ -29,16 +29,13 @@ export const GET: RequestHandler = async ({ request }) => {
 		.orderBy(desc(invitationCodes.createdAt));
 
 	return json(codes);
-}
+};
 
 export const POST: RequestHandler = async ({ request }) => {
 	requireAdminAuth(request);
 
 	const body = await request.json();
-	const { 
-		code, type, encryptionMode, bonusAmount, 
-		assignedNodeId, maxUses = 1 
-	} = body;
+	const { code, type, encryptionMode, bonusAmount, assignedNodeId, maxUses = 1 } = body;
 
 	if (!type || !encryptionMode || bonusAmount === undefined) {
 		throw error(400, 'Missing required fields: type, encryptionMode, bonusAmount');
@@ -52,16 +49,19 @@ export const POST: RequestHandler = async ({ request }) => {
 		keyValue: generateRandomKey()
 	});
 
-	const newCode = await db.insert(invitationCodes).values({
-		id: crypto.randomUUID(),
-		code: finalCode,
-		type,
-		encryptionMode,
-		encryptionKeyId: newKeyId,
-		bonusAmount,
-		maxUses,
-		assignedNodeId
-	}).returning();
+	const newCode = await db
+		.insert(invitationCodes)
+		.values({
+			id: crypto.randomUUID(),
+			code: finalCode,
+			type,
+			encryptionMode,
+			encryptionKeyId: newKeyId,
+			bonusAmount,
+			maxUses,
+			assignedNodeId
+		})
+		.returning();
 
 	return json(newCode[0]);
-}
+};

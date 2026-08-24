@@ -25,7 +25,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	const pathname = event.url.pathname;
-	
+
 	// Handle CORS for admin API
 	if (pathname.startsWith('/api/admin/')) {
 		if (event.request.method === 'OPTIONS') {
@@ -33,12 +33,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 				headers: {
 					'Access-Control-Allow-Origin': '*',
 					'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-					'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+					'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 				}
 			});
 		}
 	}
-	
+
 	const publicRoutes = [
 		'/login',
 		'/register',
@@ -46,15 +46,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 		'/about',
 		'/privacy',
 		'/login/google',
-		'/login/google/callback'
-	, '/api/auth/check-username'];
-	const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
+		'/login/google/callback',
+		'/api/auth/check-username'
+	];
+	const isPublicRoute = publicRoutes.some(
+		(route) => pathname === route || pathname.startsWith(route + '/')
+	);
 	const isVerifyEmailRoute = pathname.startsWith('/verify-email');
 	const isResetPasswordRoute = pathname.startsWith('/reset-password/');
 
 	const isAuthRoute = pathname === '/login' || pathname === '/register';
 
-	if (!event.locals.user && !isPublicRoute && !isVerifyEmailRoute && !isResetPasswordRoute && !pathname.startsWith('/api/admin/')) {
+	if (
+		!event.locals.user &&
+		!isPublicRoute &&
+		!isVerifyEmailRoute &&
+		!isResetPasswordRoute &&
+		!pathname.startsWith('/api/admin/')
+	) {
 		throw redirect(303, '/login');
 	}
 
@@ -74,7 +83,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				event.cookies.delete('session_id', { path: '/' });
 				event.locals.user = null;
 				event.locals.session = null;
-				// Instead of throw redirect (which might cause loop if cookie persists), 
+				// Instead of throw redirect (which might cause loop if cookie persists),
 				// redirect to login with query param. If we are already on login, do nothing to break loop.
 				if (pathname !== '/login') {
 					throw redirect(303, '/login?error=suspended');
@@ -88,7 +97,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		// If user is logged in but hasn't onboarded (telegram setup), force onboarding
 		// Exclude onboarding route itself to prevent redirect loop
-		if (!event.locals.user.telegramNodeId && pathname !== '/onboarding' && !pathname.startsWith('/api/')) {
+		if (
+			!event.locals.user.telegramNodeId &&
+			pathname !== '/onboarding' &&
+			!pathname.startsWith('/api/')
+		) {
 			throw redirect(303, '/onboarding');
 		}
 	}

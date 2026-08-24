@@ -28,7 +28,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	// Fetch Telegram Node
 	const { telegramNodes } = await import('$lib/server/db/schema');
-	const nodeResult = await db.select().from(telegramNodes).where(eq(telegramNodes.id, locals.user.telegramNodeId!));
+	const nodeResult = await db
+		.select()
+		.from(telegramNodes)
+		.where(eq(telegramNodes.id, locals.user.telegramNodeId!));
 	if (nodeResult.length === 0) {
 		throw error(400, 'Telegram node not found');
 	}
@@ -41,17 +44,17 @@ export const GET: RequestHandler = async ({ locals }) => {
 		try {
 			const tgUrl = await getFileDownloadUrl(node.botToken, file.telegramFileId);
 			const response = await fetch(tgUrl);
-			
+
 			if (!response.ok) {
 				errors.push(`Failed to fetch file ${file.fileName} from Telegram`);
 				continue;
 			}
-			
+
 			const arrayBuffer = await response.arrayBuffer();
 			const buffer = Buffer.from(arrayBuffer);
-			
+
 			const audioMeta = await parseBuffer(buffer, file.mimeType || 'audio/mpeg');
-			
+
 			let newThumbnailUrl = null;
 			let title = file.title;
 			let artist = file.artist;

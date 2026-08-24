@@ -27,7 +27,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		}
 
 		const data = await response.json();
-		
+
 		// Map to a simplified array
 		const results = data.map((item: any) => ({
 			id: item.id,

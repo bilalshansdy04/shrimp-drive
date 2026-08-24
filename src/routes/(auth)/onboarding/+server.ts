@@ -1,9 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { users, invitationCodes, encryptionKeys, storageBonuses, telegramNodes } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
-import { generateRandomKey } from '$lib/server/crypto';
+import { users, invitationCodes, storageBonuses, telegramNodes } from '$lib/server/db/schema';
+import { eq, like } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { recalculateUserStorageLimit } from '$lib/server/storage';
 
@@ -14,19 +13,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const data = await request.json();
-		const { code, botToken, chatId } = data;
+		const { backendChoice, code, botToken, chatId, enableEncryption, authHash, encryptedVaultKey } = data;
 
 		let finalNodeId: string | null = null;
 		let finalEncryptionMode = 'flexible';
-		let inviteType = 'regular_self_setup';
 		let inviteCodeRecord: any = null;
-		
-		let finalEncryptionKeyId: string | null = null;
+
 		let bonusStorageToGrant = 0;
 
+		// 1. Process Invitation Code (Optional)
 		if (code) {
-			// Verify Invitation Code
-			const codeResult = await db.select().from(invitationCodes).where(eq(invitationCodes.code, code));
+			const codeResult = await db
+				.select()
+				.from(invitationCodes)
+				.where(eq(invitationCodes.code, code));
 			if (codeResult.length === 0) {
 				return json({ error: 'Invalid Invitation Code.' }, { status: 400 });
 			}
@@ -38,24 +38,33 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			finalEncryptionMode = inviteCodeRecord.encryptionMode;
 			bonusStorageToGrant = inviteCodeRecord.bonusAmount;
-			inviteType = inviteCodeRecord.type;
-			
-			if (inviteCodeRecord.encryptionKeyId) {
-				finalEncryptionKeyId = inviteCodeRecord.encryptionKeyId;
-			}
-
-			if (inviteCodeRecord.type === 'friend_zero_setup') {
-				if (!inviteCodeRecord.assignedNodeId) {
-					return json({ error: 'Invitation Code is invalid. Missing admin storage node.' }, { status: 400 });
-				}
-				finalNodeId = inviteCodeRecord.assignedNodeId;
-			}
 		}
 
-		if (!code || inviteType !== 'friend_zero_setup') {
-			if (!botToken || !chatId) {
-				return json({ error: 'Bot Token and Chat ID are required.' }, { status: 400 });
+		// 2. Assign Storage Node
+		if (backendChoice === 'global') {
+			// Find the Global Node
+			// We look for a node named 'drive-global' or similar
+			const globalNodes = await db
+				.select()
+				.from(telegramNodes)
+				.where(like(telegramNodes.name, '%global%'));
+
+			if (globalNodes.length === 0) {
+				return json(
+					{ error: 'Global Drive node is not configured by the administrator.' },
+					{ status: 500 }
+				);
 			}
+			finalNodeId = globalNodes[0].id;
+		} else {
+			// Custom Node Setup
+			if (!botToken || !chatId) {
+				return json(
+					{ error: 'Bot Token and Chat ID are required for Custom Node.' },
+					{ status: 400 }
+				);
+			}
+
 			// Verify custom Bot Token
 			const getMeRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
 			const getMeData = await getMeRes.json();
@@ -64,12 +73,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 
 			// Verify custom Chat ID
-			const getChatRes = await fetch(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${chatId}`);
+			const getChatRes = await fetch(
+				`https://api.telegram.org/bot${botToken}/getChat?chat_id=${chatId}`
+			);
 			const getChatData = await getChatRes.json();
 			if (!getChatData.ok) {
-				return json({ error: `Invalid Chat ID or Bot not added to channel. Telegram says: ${getChatData.description}` }, { status: 400 });
+				return json(
+					{
+						error: `Invalid Chat ID or Bot not added to channel. Telegram says: ${getChatData.description}`
+					},
+					{ status: 400 }
+				);
 			}
-			
+
 			// Create a personal telegram node for the user
 			finalNodeId = crypto.randomUUID();
 			await db.insert(telegramNodes).values({
@@ -81,25 +97,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			});
 		}
 
-		// If no encryption key provided by invite code (or flexible mode), generate a new one
-		// Only locked_off should NOT have an encryption key
-		if (!finalEncryptionKeyId && finalEncryptionMode !== 'locked_off') {
-			finalEncryptionKeyId = crypto.randomUUID();
-			await db.insert(encryptionKeys).values({
-				id: finalEncryptionKeyId,
-				keyValue: generateRandomKey()
-			});
-		}
-
-		// Update User
-		await db.update(users).set({
+		// 3. Update User
+		const updateData: any = {
 			telegramNodeId: finalNodeId,
 			encryptionMode: finalEncryptionMode,
-			encryptionKeyId: finalEncryptionKeyId
-		}).where(eq(users.id, locals.user.id));
+			isEncryptionActive: enableEncryption === true
+		};
 
+		if (authHash && encryptedVaultKey) {
+			const bcrypt = await import('bcryptjs');
+			updateData.passwordHash = await bcrypt.hash(authHash, 10);
+			updateData.encryptedVaultKey = encryptedVaultKey;
+		}
+
+		await db
+			.update(users)
+			.set(updateData)
+			.where(eq(users.id, locals.user.id));
+
+		// 4. Handle Invite Code Rewards
 		if (code && inviteCodeRecord) {
-			// Grant Storage Bonus in the new table
+			// Grant Storage Bonus
 			if (bonusStorageToGrant > 0 || bonusStorageToGrant === -1) {
 				await db.insert(storageBonuses).values({
 					id: crypto.randomUUID(),
@@ -112,12 +130,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			// Mark code as used
 			const newUsedCount = inviteCodeRecord.usedCount + 1;
 			const isFullyUsed = newUsedCount >= inviteCodeRecord.maxUses ? 1 : 0;
-			
-			await db.update(invitationCodes).set({
-				isUsed: isFullyUsed,
-				usedBy: locals.user.id,
-				usedCount: newUsedCount
-			}).where(eq(invitationCodes.code, code));
+
+			await db
+				.update(invitationCodes)
+				.set({
+					isUsed: isFullyUsed,
+					usedBy: locals.user.id,
+					usedCount: newUsedCount
+				})
+				.where(eq(invitationCodes.code, code));
 		}
 
 		await recalculateUserStorageLimit(locals.user.id);

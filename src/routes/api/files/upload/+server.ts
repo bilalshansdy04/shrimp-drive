@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { users, files } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { uploadFileToTelegram } from '$lib/server/telegram';
 import { parseBuffer } from 'music-metadata';
 import crypto from 'crypto';
@@ -10,10 +10,16 @@ import { encryptBuffer } from '$lib/server/crypto';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB soft limit
 
-function getFileType(mimeType: string) {
-	if (mimeType.startsWith('audio/')) return 'audio';
-	if (mimeType.startsWith('video/')) return 'video';
-	if (mimeType.startsWith('image/')) return 'image';
+function getFileType(mimeType: string, fileName: string) {
+	const ext = fileName.split('.').pop()?.toLowerCase().trim();
+	
+	const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'svg', 'tiff', 'raw'];
+	const videoExts = ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'wmv'];
+	const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'];
+
+	if (mimeType.startsWith('audio/') || (ext && audioExts.includes(ext))) return 'audio';
+	if (mimeType.startsWith('video/') || (ext && videoExts.includes(ext))) return 'video';
+	if (mimeType.startsWith('image/') || (ext && imageExts.includes(ext))) return 'image';
 	return 'document';
 }
 
@@ -38,25 +44,28 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return json({ error: 'Storage Limit Exceeded' }, { status: 403 });
 		}
 
-		const fileType = getFileType(file.type);
-		
+		const fileType = getFileType(file.type, file.name);
+
 		const folderId = formData.get('folderId') as string | null;
-		
+
 		// Validate folder if provided
 		if (folderId) {
 			const { folders } = await import('$lib/server/db/schema');
 			const { and, eq } = await import('drizzle-orm');
-			
+
 			const targetFolder = await db.query.folders.findFirst({
 				where: and(eq(folders.id, folderId), eq(folders.userId, locals.user.id))
 			});
-			
+
 			if (!targetFolder) {
 				return json({ error: 'Target folder not found' }, { status: 404 });
 			}
-			
+
 			if (targetFolder.category !== fileType) {
-				return json({ error: `Cannot upload ${fileType} to a ${targetFolder.category} folder` }, { status: 400 });
+				return json(
+					{ error: `Cannot upload ${fileType} to a ${targetFolder.category} folder` },
+					{ status: 400 }
+				);
 			}
 		}
 
@@ -91,7 +100,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Fetch Telegram Node
 		const { telegramNodes, encryptionKeys } = await import('$lib/server/db/schema');
-		const nodeResult = await db.select().from(telegramNodes).where(eq(telegramNodes.id, locals.user.telegramNodeId!));
+		const nodeResult = await db
+			.select()
+			.from(telegramNodes)
+			.where(eq(telegramNodes.id, locals.user.telegramNodeId!));
 		if (nodeResult.length === 0) {
 			return json({ error: 'Telegram node not found' }, { status: 400 });
 		}
@@ -100,7 +112,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Fetch Encryption Key if needed
 		let encryptionKeyStr: string | null = null;
 		if (locals.user.encryptionKeyId) {
-			const keyResult = await db.select().from(encryptionKeys).where(eq(encryptionKeys.id, locals.user.encryptionKeyId));
+			const keyResult = await db
+				.select()
+				.from(encryptionKeys)
+				.where(eq(encryptionKeys.id, locals.user.encryptionKeyId));
 			if (keyResult.length > 0) {
 				encryptionKeyStr = keyResult[0].keyValue;
 			}
@@ -109,34 +124,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		let metadata: any = {};
 
 		if (fileType === 'audio') {
-			try {
-				const buffer = Buffer.from(await file.arrayBuffer());
-				const audioMeta = await parseBuffer(buffer, file.type);
-				metadata = {
-					title: audioMeta.common.title,
-					artist: audioMeta.common.artist,
-					album: audioMeta.common.album,
-					duration: audioMeta.format.duration,
-					thumbnailUrl: null as string | null
-				};
-				
-				if (audioMeta.common.picture && audioMeta.common.picture.length > 0) {
-					const pic = audioMeta.common.picture[0];
-					const picBlob = new Blob([pic.data as unknown as BlobPart], { type: pic.format });
-					try {
-						const picTgResult = await uploadFileToTelegram(
-							node.botToken,
-							node.chatId,
-							picBlob,
-							'cover.jpg'
-						);
-						metadata.thumbnailUrl = `/api/files/thumbnail/${picTgResult.telegramFileId}`;
-					} catch (e) {
-						console.error('Failed to upload thumbnail to Telegram:', e);
-					}
+			const audioTitle = formData.get('audioTitle') as string | null;
+			const audioArtist = formData.get('audioArtist') as string | null;
+			const audioAlbum = formData.get('audioAlbum') as string | null;
+			const audioDuration = formData.get('audioDuration') as string | null;
+			const audioThumbnail = formData.get('audioThumbnail') as Blob | null;
+
+			if (audioTitle) metadata.title = audioTitle;
+			if (audioArtist) metadata.artist = audioArtist;
+			if (audioAlbum) metadata.album = audioAlbum;
+			if (audioDuration) metadata.duration = parseFloat(audioDuration);
+
+			if (audioThumbnail) {
+				try {
+					const picTgResult = await uploadFileToTelegram(
+						node.botToken,
+						node.chatId,
+						audioThumbnail,
+						'cover.jpg'
+					);
+					metadata.thumbnailUrl = `/api/files/thumbnail/${picTgResult.telegramFileId}`;
+				} catch (e) {
+					console.error('Failed to upload thumbnail to Telegram:', e);
 				}
-			} catch (e) {
-				console.error('Failed to extract audio metadata:', e);
 			}
 		} else if (fileType === 'video') {
 			const videoThumbnail = formData.get('videoThumbnail') as string | null;
@@ -166,46 +176,35 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		}
 
-		let uploadData: File | Blob = file;
-		let isEncrypted = false;
-
-		if (locals.user.encryptionMode === 'locked_on' || (locals.user.encryptionMode === 'flexible' && locals.user.isEncryptionActive)) {
-			if (!encryptionKeyStr) {
-				return json({ error: 'Encryption key not found.' }, { status: 400 });
-			}
-			const buffer = Buffer.from(await file.arrayBuffer());
-			const encryptedBuffer = encryptBuffer(buffer, encryptionKeyStr, fileId);
-			uploadData = new Blob([encryptedBuffer as unknown as BlobPart], { type: file.type || 'application/octet-stream' });
-			isEncrypted = true;
-		}
-
+		const isEncrypted = formData.get('isEncryptedClientSide') === 'true';
 		const tgFileName = isEncrypted ? `${crypto.randomUUID().replace(/-/g, '')}.txt` : finalFileName;
 
 		// Upload to Telegram
-		const tgResult = await uploadFileToTelegram(
-			node.botToken,
-			node.chatId,
-			uploadData,
-			tgFileName
-		);
+		const tgResult = await uploadFileToTelegram(node.botToken, node.chatId, file, tgFileName);
 
 		if (conflictAction === 'replace' && replaceFileId && existingFile) {
-			await db.update(files).set({
-				fileType: fileType,
-				mimeType: file.type || 'application/octet-stream',
-				fileSize: file.size,
-				telegramFileId: tgResult.telegramFileId,
-				title: metadata.title,
-				artist: metadata.artist,
-				album: metadata.album,
-				duration: metadata.duration ? Math.round(metadata.duration) : null,
-				thumbnailUrl: metadata.thumbnailUrl || null,
-				isEncrypted
-			}).where(eq(files.id, fileId));
+			await db
+				.update(files)
+				.set({
+					fileType: fileType,
+					mimeType: file.type || 'application/octet-stream',
+					fileSize: file.size,
+					telegramFileId: tgResult.telegramFileId,
+					title: metadata.title,
+					artist: metadata.artist,
+					album: metadata.album,
+					duration: metadata.duration ? Math.round(metadata.duration) : null,
+					thumbnailUrl: metadata.thumbnailUrl || null,
+					isEncrypted
+				})
+				.where(eq(files.id, fileId));
 
 			const sizeDiff = file.size - existingFile.fileSize;
-			await db.update(users).set({ storageUsed: locals.user.storageUsed + sizeDiff }).where(eq(users.id, locals.user.id));
-			
+			await db
+				.update(users)
+				.set({ storageUsed: locals.user.storageUsed + sizeDiff })
+				.where(eq(users.id, locals.user.id));
+
 			return json({ success: true, fileId });
 		}
 

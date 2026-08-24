@@ -42,7 +42,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	// 1.5.1 Auto-create default root folders if missing
 	if (!folderId) {
-		const existingCategories = new Set(childFolders.map(f => f.category));
+		const existingCategories = new Set(childFolders.map((f) => f.category));
 		const defaultFolders = [
 			{ name: 'Music', category: 'audio' },
 			{ name: 'Video', category: 'video' },
@@ -68,13 +68,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			childFolders = await db
 				.select()
 				.from(folders)
-				.where(
-					and(
-						eq(folders.userId, userId),
-						isNull(folders.parentId),
-						isNull(folders.deletedAt)
-					)
-				)
+				.where(and(eq(folders.userId, userId), isNull(folders.parentId), isNull(folders.deletedAt)))
 				.orderBy(desc(folders.createdAt));
 		}
 
@@ -83,9 +77,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			.select()
 			.from(files)
 			.where(and(eq(files.userId, userId), isNull(files.folderId), isNull(files.deletedAt)));
-		
+
 		if (rootFiles.length > 0) {
-			const categoryToFolderId = new Map(childFolders.map(f => [f.category, f.id]));
+			const categoryToFolderId = new Map(childFolders.map((f) => [f.category, f.id]));
 			for (const file of rootFiles) {
 				const targetFolderId = categoryToFolderId.get(file.fileType);
 				if (targetFolderId) {
@@ -108,9 +102,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		)
 		.orderBy(desc(files.createdAt));
 
-
 	// 1.6 Fetch Breadcrumbs using Recursive CTE
-	let breadcrumbs: { id: string, name: string }[] = [];
+	let breadcrumbs: { id: string; name: string }[] = [];
 	if (folderId) {
 		const rows = await db.all(sql`
 			WITH RECURSIVE parent_folders(id, name, parent_id, level) AS (
@@ -121,14 +114,17 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			)
 			SELECT id, name FROM parent_folders ORDER BY level DESC
 		`);
-		breadcrumbs = rows as { id: string, name: string }[];
+		breadcrumbs = rows as { id: string; name: string }[];
 	}
 
 	// 2. Fetch category stats
-	const allFiles = await db.select({
-		fileType: files.fileType,
-		fileSize: files.fileSize
-	}).from(files).where(and(eq(files.userId, userId), isNull(files.deletedAt)));
+	const allFiles = await db
+		.select({
+			fileType: files.fileType,
+			fileSize: files.fileSize
+		})
+		.from(files)
+		.where(and(eq(files.userId, userId), isNull(files.deletedAt)));
 
 	const stats = {
 		audio: { size: 0, count: 0 },

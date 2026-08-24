@@ -6,7 +6,7 @@ import { redirect } from '@sveltejs/kit';
 export const GET: RequestHandler = async ({ cookies }) => {
 	const state = generateState();
 	const codeVerifier = generateCodeVerifier();
-	
+
 	const url = await googleAuth.createAuthorizationURL(state, codeVerifier, ['profile', 'email']);
 
 	cookies.set('google_oauth_state', state, {

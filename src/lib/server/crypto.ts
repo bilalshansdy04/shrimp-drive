@@ -18,7 +18,7 @@ function deriveIV(fileId: string): Buffer {
 
 /**
  * Encrypts an entire buffer in memory before uploading to Telegram.
- * 
+ *
  * @param buffer - The raw file buffer.
  * @param keyHex - The 64-character hex encryption key of the user.
  * @param fileId - The unique file ID (used to derive a deterministic IV).
@@ -28,7 +28,7 @@ export function encryptBuffer(buffer: Buffer, keyHex: string, fileId: string): B
 	const key = Buffer.from(keyHex, 'hex');
 	const iv = deriveIV(fileId);
 	const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-	
+
 	const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
 	return encrypted;
 }
@@ -37,7 +37,7 @@ export function encryptBuffer(buffer: Buffer, keyHex: string, fileId: string): B
  * Creates a Transform stream that decrypts incoming data starting from a specific byte offset.
  * Because AES-CTR is a stream cipher, we can fast-forward the stream state to the exact offset
  * without needing the preceding bytes.
- * 
+ *
  * @param keyHex - The 64-character hex encryption key of the user.
  * @param fileId - The unique file ID.
  * @param offset - The byte offset from the start of the file.
@@ -56,11 +56,11 @@ export function createDecryptionStream(keyHex: string, fileId: string, offset: n
 	// We advance this counter by the number of full blocks skipped.
 	const counter = BigInt('0x' + iv.toString('hex')) + BigInt(blockOffset);
 	let newIvHex = counter.toString(16).padStart(32, '0').slice(-32);
-	
+
 	const currentIv = Buffer.from(newIvHex, 'hex');
 	const decipher = crypto.createDecipheriv(ALGORITHM, key, currentIv);
 
-	// If the offset is not aligned to a 16-byte boundary, process dummy bytes 
+	// If the offset is not aligned to a 16-byte boundary, process dummy bytes
 	// to advance the keystream exactly `byteOffsetWithinBlock` bytes.
 	if (byteOffsetWithinBlock > 0) {
 		const dummy = Buffer.alloc(byteOffsetWithinBlock);

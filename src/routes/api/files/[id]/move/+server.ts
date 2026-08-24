@@ -35,7 +35,10 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 			}
 
 			if (targetFolder.category !== file.fileType) {
-				return json({ error: `Cannot move ${file.fileType} to a ${targetFolder.category} folder` }, { status: 400 });
+				return json(
+					{ error: `Cannot move ${file.fileType} to a ${targetFolder.category} folder` },
+					{ status: 400 }
+				);
 			}
 		}
 

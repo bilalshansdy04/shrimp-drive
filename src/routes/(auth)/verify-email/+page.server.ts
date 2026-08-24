@@ -32,22 +32,26 @@ export const actions: Actions = {
 			return fail(400, { error: 'Email is already verified. You can proceed to login.' });
 		}
 
-		const tokenResult = await db.select().from(emailVerificationTokens).where(eq(emailVerificationTokens.userId, user.id)).orderBy(desc(emailVerificationTokens.expiresAt));
-		
+		const tokenResult = await db
+			.select()
+			.from(emailVerificationTokens)
+			.where(eq(emailVerificationTokens.userId, user.id))
+			.orderBy(desc(emailVerificationTokens.expiresAt));
+
 		if (tokenResult.length === 0) {
 			return fail(400, { error: 'No verification code found. Please resend the code.' });
 		}
 
 		// Check if any of the valid tokens match the OTP
-		const activeTokens = tokenResult.filter(t => Date.now() <= t.expiresAt.getTime());
-		
+		const activeTokens = tokenResult.filter((t) => Date.now() <= t.expiresAt.getTime());
+
 		if (activeTokens.length === 0) {
 			// Clean up expired tokens
 			await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.userId, user.id));
 			return fail(400, { error: 'Your verification code has expired. Please resend a new one.' });
 		}
 
-		const matchingToken = activeTokens.find(t => t.token === otp);
+		const matchingToken = activeTokens.find((t) => t.token === otp);
 
 		if (!matchingToken) {
 			return fail(400, { error: 'Invalid OTP code. Please try again.' });
@@ -55,7 +59,7 @@ export const actions: Actions = {
 
 		// Update user to verified
 		await db.update(users).set({ emailVerified: 1 }).where(eq(users.id, user.id));
-		
+
 		// Delete all tokens for this user
 		await db.delete(emailVerificationTokens).where(eq(emailVerificationTokens.userId, user.id));
 

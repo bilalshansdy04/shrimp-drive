@@ -31,4 +31,4 @@ export const GET: RequestHandler = async ({ request }) => {
 		.orderBy(desc(users.createdAt));
 
 	return json(allUsers);
-}
+};

@@ -17,7 +17,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		const { db } = await import('$lib/server/db');
 		const { eq } = await import('drizzle-orm');
 
-		const nodeResult = await db.select().from(telegramNodes).where(eq(telegramNodes.id, locals.user.telegramNodeId!));
+		const nodeResult = await db
+			.select()
+			.from(telegramNodes)
+			.where(eq(telegramNodes.id, locals.user.telegramNodeId!));
 		if (nodeResult.length === 0) {
 			throw error(400, 'Telegram node not found');
 		}

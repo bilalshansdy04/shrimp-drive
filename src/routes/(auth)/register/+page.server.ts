@@ -17,14 +17,11 @@ export const actions: Actions = {
 		const username = data.get('username') as string;
 		const email = data.get('email') as string;
 		const displayName = data.get('displayName') as string;
-		const password = data.get('password') as string;
+		const authHash = data.get('authHash') as string;
+		const encryptedVaultKey = data.get('encryptedVaultKey') as string;
 
-		if (!username || !email || !displayName || !password) {
+		if (!username || !email || !displayName || !authHash || !encryptedVaultKey) {
 			return fail(400, { error: 'All fields are required.' });
-		}
-
-		if (password.length < 8) {
-			return fail(400, { error: 'Password must be at least 8 characters.' });
 		}
 
 		// Check if username or email already exists
@@ -37,7 +34,8 @@ export const actions: Actions = {
 			return fail(400, { error: 'Username or Email already in use.' });
 		}
 
-		const passwordHash = await bcrypt.hash(password, 10);
+		// Hash the client's authHash one more time using bcrypt
+		const passwordHash = await bcrypt.hash(authHash, 10);
 		const userId = crypto.randomUUID();
 
 		try {
@@ -47,6 +45,7 @@ export const actions: Actions = {
 				email,
 				displayName,
 				passwordHash,
+				encryptedVaultKey,
 				emailVerified: 0
 			});
 
@@ -69,7 +68,13 @@ export const actions: Actions = {
 			throw redirect(303, `/verify-email?email=${encodeURIComponent(email)}`);
 		} catch (error) {
 			// Ignore redirect errors as they are expected behavior in SvelteKit
-			if (error && typeof error === 'object' && 'status' in error && (error as any).status >= 300 && (error as any).status < 400) {
+			if (
+				error &&
+				typeof error === 'object' &&
+				'status' in error &&
+				(error as any).status >= 300 &&
+				(error as any).status < 400
+			) {
 				throw error;
 			}
 			console.error('Error during registration:', error);

@@ -49,7 +49,7 @@ export const GET: RequestHandler = async ({ request, params }) => {
 		...user,
 		storageByCategory
 	});
-}
+};
 
 import bcryptjs from 'bcryptjs';
 
@@ -62,11 +62,11 @@ export const PATCH: RequestHandler = async ({ request, params }) => {
 	if (body.storageLimit !== undefined) updates.storageLimit = body.storageLimit;
 	if (body.isSuspended !== undefined) updates.isSuspended = body.isSuspended;
 	if (body.isActive !== undefined) updates.isActive = body.isActive;
-	
+
 	if (body.customStorageBonus !== undefined) {
 		updates.customStorageBonus = body.customStorageBonus;
 	}
-	
+
 	if (body.password) {
 		updates.passwordHash = await bcryptjs.hash(body.password, 10);
 	}
@@ -95,19 +95,16 @@ export const PATCH: RequestHandler = async ({ request, params }) => {
 	const finalUser = await db.select().from(users).where(eq(users.id, params.id));
 
 	return json(finalUser[0]);
-}
+};
 
 export const DELETE: RequestHandler = async ({ request, params }) => {
 	requireAdminAuth(request);
 
-	const deletedUser = await db
-		.delete(users)
-		.where(eq(users.id, params.id))
-		.returning();
+	const deletedUser = await db.delete(users).where(eq(users.id, params.id)).returning();
 
 	if (deletedUser.length === 0) {
 		throw error(404, 'User not found');
 	}
 
 	return json({ success: true, deletedId: params.id });
-}
+};

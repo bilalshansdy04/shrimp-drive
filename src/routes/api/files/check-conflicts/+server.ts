@@ -39,7 +39,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}
 		});
 
-		const conflicts = existingFiles.map(f => ({
+		const conflicts = existingFiles.map((f) => ({
 			fileId: f.id,
 			fileName: f.fileName
 		}));

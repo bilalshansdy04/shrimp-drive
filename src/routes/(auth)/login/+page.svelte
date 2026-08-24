@@ -1,9 +1,35 @@
 <script lang="ts">
 	import { AtSign, Key, LogIn } from 'lucide-svelte';
 	import { enhance } from '$app/forms';
+	import { deriveKeysFromPassword, unwrapMasterKey } from '$lib/client/crypto';
+	import { saveVaultKeyToSession } from '$lib/client/encryptionStore';
+	import { goto } from '$app/navigation';
 
 	let { form } = $props<{ form: any }>();
 	let isLoading = $state(false);
+
+	let username = $state('');
+	let rawPassword = $state('');
+
+	let authHash = $state('');
+	let formElement = $state<HTMLFormElement | null>(null);
+
+	async function handleLogin() {
+		if (!username || !rawPassword) return;
+		isLoading = true;
+		try {
+			const { authHash: derivedAuthHash } = await deriveKeysFromPassword(rawPassword, username);
+			authHash = derivedAuthHash;
+
+			// Submit form programmatically after deriving hash
+			if (formElement) {
+				formElement.requestSubmit();
+			}
+		} catch (e) {
+			console.error('Crypto error', e);
+			isLoading = false;
+		}
+	}
 </script>
 
 <div
@@ -42,15 +68,36 @@
 			{/if}
 
 			<form
+				bind:this={formElement}
 				method="POST"
-				use:enhance={() => {
+				use:enhance={(e) => {
+					if (authHash === '') {
+						e.cancel();
+						handleLogin();
+						return;
+					}
 					isLoading = true;
-					return async ({ update }) => {
-						await update();
+					return async ({ result }) => {
+						if (result.type === 'success' && result.data?.success) {
+							// Unwrap DEK with KEK
+							try {
+								if (result.data && result.data.encryptedVaultKey) {
+									const { kek } = await deriveKeysFromPassword(rawPassword, username);
+									const dek = await unwrapMasterKey(result.data.encryptedVaultKey as string, kek);
+									saveVaultKeyToSession(dek);
+								}
+								goto((result.data?.redirectTo as string) || '/dashboard');
+							} catch (err) {
+								console.error('Failed to unwrap vault key', err);
+								alert('Could not decrypt vault key. Please try again.');
+							}
+						}
 						isLoading = false;
 					};
 				}}
 			>
+				<input type="hidden" name="authHash" value={authHash} />
+
 				<div class="mb-8 space-y-4">
 					<div class="group relative">
 						<label class="mb-1 block text-xs font-medium text-gray-400" for="username"
@@ -62,6 +109,7 @@
 								size={20}
 							/>
 							<input
+								bind:value={username}
 								name="username"
 								id="username"
 								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
@@ -81,6 +129,7 @@
 								size={20}
 							/>
 							<input
+								bind:value={rawPassword}
 								name="password"
 								id="password"
 								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
@@ -90,9 +139,11 @@
 							/>
 						</div>
 					</div>
-					
+
 					<div class="flex justify-end">
-						<a href="/forgot-password" class="text-xs font-medium text-[#FF6B4A] hover:underline">Forgot password?</a>
+						<a href="/forgot-password" class="text-xs font-medium text-[#FF6B4A] hover:underline"
+							>Forgot password?</a
+						>
 					</div>
 				</div>
 

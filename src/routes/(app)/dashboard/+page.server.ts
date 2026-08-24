@@ -20,10 +20,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.limit(10);
 
 	// 2. Fetch category stats
-	const allFiles = await db.select({
-		fileType: files.fileType,
-		fileSize: files.fileSize
-	}).from(files).where(and(eq(files.userId, userId), isNull(files.deletedAt)));
+	const allFiles = await db
+		.select({
+			fileType: files.fileType,
+			fileSize: files.fileSize
+		})
+		.from(files)
+		.where(and(eq(files.userId, userId), isNull(files.deletedAt)));
 
 	const stats = {
 		audio: { size: 0, count: 0 },

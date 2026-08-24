@@ -20,10 +20,10 @@ export const actions: Actions = {
 		}
 
 		const userResult = await db.select().from(users).where(eq(users.email, email));
-		
+
 		if (userResult.length > 0) {
 			const user = userResult[0];
-			
+
 			const token = crypto.randomBytes(32).toString('hex');
 			// Token valid for 1 hour
 			const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
