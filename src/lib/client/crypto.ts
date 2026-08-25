@@ -136,3 +136,55 @@ export async function decryptFileBlob(
 
 	return new Blob([decrypted], { type: originalType });
 }
+
+// 9. Encrypt Metadata (for Telegram Captions)
+export async function encryptMetadata(metadata: object, dek: Uint8Array): Promise<string> {
+	const key = await window.crypto.subtle.importKey('raw', dek as BufferSource, { name: 'AES-GCM' }, false, [
+		'encrypt'
+	]);
+
+	const iv = new Uint8Array(12);
+	window.crypto.getRandomValues(iv);
+
+	const encoder = new TextEncoder();
+	const data = encoder.encode(JSON.stringify(metadata));
+
+	const encryptedBuffer = await window.crypto.subtle.encrypt(
+		{ name: 'AES-GCM', iv },
+		key,
+		data
+	);
+
+	const encryptedArray = new Uint8Array(encryptedBuffer);
+	const combined = new Uint8Array(iv.length + encryptedArray.length);
+	combined.set(iv, 0);
+	combined.set(encryptedArray, iv.length);
+
+	// Return as Base64
+	return btoa(String.fromCharCode.apply(null, combined as unknown as number[]));
+}
+
+// 10. Decrypt Metadata
+export async function decryptMetadata(encryptedBase64: string, dek: Uint8Array): Promise<object> {
+	const key = await window.crypto.subtle.importKey('raw', dek as BufferSource, { name: 'AES-GCM' }, false, [
+		'decrypt'
+	]);
+
+	const binaryString = atob(encryptedBase64);
+	const combined = new Uint8Array(binaryString.length);
+	for (let i = 0; i < binaryString.length; i++) {
+		combined[i] = binaryString.charCodeAt(i);
+	}
+
+	const iv = combined.slice(0, 12);
+	const ciphertext = combined.slice(12);
+
+	const decryptedBuffer = await window.crypto.subtle.decrypt(
+		{ name: 'AES-GCM', iv },
+		key,
+		ciphertext
+	);
+
+	const decoder = new TextDecoder();
+	return JSON.parse(decoder.decode(decryptedBuffer));
+}

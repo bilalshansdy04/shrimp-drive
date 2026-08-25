@@ -37,52 +37,52 @@ export const PATCH: RequestHandler = async ({ request, params, locals }) => {
 	}
 };
 
+import { hardDeleteFile } from '$lib/server/fileUtils';
+
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	if (!locals.user) {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	const folderId = params.id;
+	const userId = locals.user.id;
 
 	try {
 		// Ensure folder belongs to user
 		const folder = await db.query.folders.findFirst({
-			where: and(eq(folders.id, folderId), eq(folders.userId, locals.user.id))
+			where: and(eq(folders.id, folderId), eq(folders.userId, userId))
 		});
 
 		if (!folder) {
 			return json({ error: 'Folder not found' }, { status: 404 });
 		}
 
-		const now = new Date();
-
-		// Soft delete the folder itself
-		await db.update(folders).set({ deletedAt: now }).where(eq(folders.id, folderId));
-
-		// Soft delete all child files
-		await db.update(files).set({ deletedAt: now }).where(eq(files.folderId, folderId));
-
-		// Note: To properly cascade soft-delete to deeply nested descendants
-		// we use a recursive CTE
+		// Find all descendant folders using recursive CTE
 		const descendantsResult = await db.all(sql`
 			WITH RECURSIVE descendant_folders(id) AS (
-				SELECT id FROM folders WHERE parent_id = ${folderId} AND deleted_at IS NULL
+				SELECT id FROM folders WHERE parent_id = ${folderId}
 				UNION ALL
 				SELECT f.id FROM folders f
 				JOIN descendant_folders df ON f.parent_id = df.id
-				WHERE f.deleted_at IS NULL
 			)
 			SELECT id FROM descendant_folders
 		`);
+		const folderIds = [folderId, ...descendantsResult.map((row: any) => row.id as string)];
 
-		// LibSQL returns rows in descendantsResult
-		const descendantFolderIds = descendantsResult.map((row: any) => row.id as string);
+		let currentStorage = locals.user.storageUsed;
 
-		if (descendantFolderIds.length > 0) {
-			for (const id of descendantFolderIds) {
-				await db.update(folders).set({ deletedAt: now }).where(eq(folders.id, id));
-				await db.update(files).set({ deletedAt: now }).where(eq(files.folderId, id));
+		// For each folder, find all files and hard delete them
+		for (const fid of folderIds) {
+			const folderFiles = await db.select().from(files).where(eq(files.folderId, fid));
+			for (const file of folderFiles) {
+				try {
+					currentStorage = await hardDeleteFile(file.id, userId, currentStorage);
+				} catch (e) {
+					console.error(`Failed to hard delete file ${file.id} in folder ${fid}:`, e);
+				}
 			}
+			// Delete the folder itself from DB
+			await db.delete(folders).where(eq(folders.id, fid));
 		}
 
 		return json({ success: true });

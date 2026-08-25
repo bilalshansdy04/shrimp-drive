@@ -177,10 +177,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const isEncrypted = formData.get('isEncryptedClientSide') === 'true';
+		const encryptedMetadata = formData.get('encryptedMetadata') as string | null;
+		
 		const tgFileName = isEncrypted ? `${crypto.randomUUID().replace(/-/g, '')}.txt` : finalFileName;
 
 		// Upload to Telegram
-		const tgResult = await uploadFileToTelegram(node.botToken, node.chatId, file, tgFileName);
+		const tgResult = await uploadFileToTelegram(
+			node.botToken, 
+			node.chatId, 
+			file, 
+			tgFileName,
+			encryptedMetadata || undefined
+		);
 
 		if (conflictAction === 'replace' && replaceFileId && existingFile) {
 			await db
@@ -195,6 +203,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					album: metadata.album,
 					duration: metadata.duration ? Math.round(metadata.duration) : null,
 					thumbnailUrl: metadata.thumbnailUrl || null,
+					telegramMessageId: tgResult.telegramMessageId,
 					isEncrypted
 				})
 				.where(eq(files.id, fileId));
@@ -222,6 +231,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			album: metadata.album,
 			duration: metadata.duration ? Math.round(metadata.duration) : null,
 			thumbnailUrl: metadata.thumbnailUrl || null,
+			telegramMessageId: tgResult.telegramMessageId,
 			isEncrypted
 		});
 

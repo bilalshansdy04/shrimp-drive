@@ -2,13 +2,18 @@ export async function uploadFileToTelegram(
 	botToken: string,
 	chatId: string,
 	file: File | Blob,
-	filename: string
+	filename: string,
+	caption?: string
 ) {
 	const url = `https://api.telegram.org/bot${botToken}/sendDocument`;
 
 	const formData = new FormData();
 	formData.append('chat_id', chatId);
 	formData.append('document', file, filename);
+	
+	if (caption) {
+		formData.append('caption', caption);
+	}
 
 	try {
 		const res = await fetch(url, {
@@ -40,7 +45,8 @@ export async function uploadFileToTelegram(
 			telegramFileId: fileObj.file_id,
 			telegramFileName: fileObj.file_name || filename,
 			telegramMimeType: fileObj.mime_type,
-			telegramFileSize: fileObj.file_size
+			telegramFileSize: fileObj.file_size,
+			telegramMessageId: data.result.message_id
 		};
 	} catch (err: any) {
 		throw err;
@@ -59,4 +65,27 @@ export async function getFileDownloadUrl(botToken: string, fileId: string) {
 
 	const filePath = data.result.file_path;
 	return `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+}
+
+export async function deleteTelegramMessage(botToken: string, chatId: string, messageId: number) {
+	const url = `https://api.telegram.org/bot${botToken}/deleteMessage`;
+
+	const res = await fetch(url, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			chat_id: chatId,
+			message_id: messageId
+		})
+	});
+	const data = await res.json();
+
+	if (!data.ok) {
+		console.error(`Failed to delete message ${messageId} from Telegram:`, data.description);
+		throw new Error(data.description || 'Failed to delete message from Telegram');
+	}
+
+	return data.result;
 }

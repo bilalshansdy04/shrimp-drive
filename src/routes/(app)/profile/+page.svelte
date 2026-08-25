@@ -175,11 +175,11 @@
 			</form>
 		</section>
 
-		<!-- Password -->
+		<!-- Password / PIN -->
 		<section class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-lg">
 			<h2 class="mb-6 flex items-center gap-2 text-xl font-bold text-white">
 				<Key class="text-[#FF6B4A]" size={24} />
-				Change Password
+				{data.user.googleId ? 'Change Vault PIN' : 'Change Password'}
 			</h2>
 			<form
 				onsubmit={async (e) => {
@@ -191,20 +191,23 @@
 					const newPassword = (formEl.elements.namedItem('newPassword') as HTMLInputElement).value;
 					const confirmPassword = (formEl.elements.namedItem('confirmPassword') as HTMLInputElement)
 						.value;
+					
+					const isGoogle = !!data.user.googleId;
+					const minLength = isGoogle ? 6 : 8;
 
 					if (newPassword !== confirmPassword) {
-						alert('New passwords do not match.');
+						alert(`New ${isGoogle ? 'PINs' : 'passwords'} do not match.`);
 						isLoading = false;
 						return;
 					}
-					if (newPassword.length < 8) {
-						alert('Password must be at least 8 characters.');
+					if (newPassword.length < minLength) {
+						alert(`${isGoogle ? 'PIN' : 'Password'} must be at least ${minLength} characters.`);
 						isLoading = false;
 						return;
 					}
 
 					try {
-						// 1. If user has existing password, derive old auth hash
+						// 1. If user has existing password/PIN, derive old auth hash
 						let currentAuthHash = '';
 						if (data.user.passwordHash) {
 							const oldKeys = await deriveKeysFromPassword(currentPassword, data.user.email);
@@ -234,71 +237,76 @@
 								newEncryptedVaultKey
 							})
 						});
-						const rData = await res.json();
 
-						if (rData.success) {
-							// Ensure DEK is in session
-							saveVaultKeyToSession(dek);
-							alert('Password updated successfully!');
-							formEl.reset();
-						} else {
-							alert(rData.error || 'Failed to update password');
+						if (!res.ok) {
+							const errData = await res.json();
+							throw new Error(errData.error || 'Failed to update.');
 						}
-					} catch (err) {
+
+						// 6. Alert success
+						alert(`${isGoogle ? 'PIN' : 'Password'} updated successfully!`);
+						
+						formEl.reset();
+					} catch (err: any) {
 						console.error(err);
-						alert('An error occurred during cryptographic operations.');
+						alert(err.message || `Failed to update ${isGoogle ? 'PIN' : 'password'}.`);
+					} finally {
+						isLoading = false;
 					}
-					isLoading = false;
 				}}
 			>
-				<div class="mb-4 space-y-4">
+				<div class="space-y-4">
 					{#if data.user.passwordHash}
 						<div class="group relative">
-							<label class="mb-1 block text-xs font-medium text-gray-400" for="currentPassword"
-								>Current Password</label
-							>
+							<label class="mb-1 block text-xs font-medium text-gray-400" for="currentPassword">
+								{data.user.googleId ? 'Current PIN' : 'Current Password'}
+							</label>
 							<input
 								name="currentPassword"
 								id="currentPassword"
 								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] px-4 py-2 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 								type="password"
+								inputmode={data.user.googleId ? 'numeric' : 'text'}
 								required
 							/>
 						</div>
 					{/if}
 					<div class="group relative">
-						<label class="mb-1 block text-xs font-medium text-gray-400" for="newPassword"
-							>New Password</label
-						>
+						<label class="mb-1 block text-xs font-medium text-gray-400" for="newPassword">
+							{data.user.googleId ? 'New PIN' : 'New Password'}
+						</label>
 						<input
 							name="newPassword"
 							id="newPassword"
 							class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] px-4 py-2 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 							type="password"
+							inputmode={data.user.googleId ? 'numeric' : 'text'}
 							required
-							minlength="8"
+							minlength={data.user.googleId ? 6 : 8}
 						/>
 					</div>
 					<div class="group relative">
-						<label class="mb-1 block text-xs font-medium text-gray-400" for="confirmPassword"
-							>Confirm New Password</label
-						>
+						<label class="mb-1 block text-xs font-medium text-gray-400" for="confirmPassword">
+							{data.user.googleId ? 'Confirm New PIN' : 'Confirm New Password'}
+						</label>
 						<input
 							name="confirmPassword"
 							id="confirmPassword"
 							class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] px-4 py-2 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 							type="password"
+							inputmode={data.user.googleId ? 'numeric' : 'text'}
 							required
-							minlength="8"
+							minlength={data.user.googleId ? 6 : 8}
 						/>
 					</div>
 				</div>
+
 				<button
 					type="submit"
 					disabled={isLoading}
-					class="mt-4 rounded-lg bg-[#2A3241] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#343D4F] disabled:opacity-50"
+					class="mt-6 rounded-lg bg-[#2A3241] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3b465a] disabled:opacity-50"
 				>
-					{isLoading ? 'Updating...' : data.user.passwordHash ? 'Update Password' : 'Set Password'}
+					{isLoading ? 'Updating...' : (data.user.googleId ? 'Update PIN' : 'Update Password')}
 				</button>
 			</form>
 		</section>

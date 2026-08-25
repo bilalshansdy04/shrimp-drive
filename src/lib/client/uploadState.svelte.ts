@@ -1,7 +1,7 @@
 import { invalidateAll } from '$app/navigation';
 import { toast } from 'svelte-sonner';
 import { get } from 'svelte/store';
-import { encryptFileBlob } from '$lib/client/crypto';
+import { encryptFileBlob, encryptMetadata } from '$lib/client/crypto';
 import { vaultKeyStore } from '$lib/client/encryptionStore';
 import * as musicMetadata from 'music-metadata-browser';
 
@@ -431,7 +431,17 @@ class UploadState {
 			try {
 				fileBlobToUpload = await encryptFileBlob(item.file, dek);
 				formData.append('isEncryptedClientSide', 'true');
-				console.log('File encrypted successfully!');
+				
+				// Doomsday Backup: Encrypt metadata for Telegram Caption
+				const metadataToEncrypt = {
+					n: item.file.name,
+					s: item.file.size,
+					t: item.file.type
+				};
+				const encMeta = await encryptMetadata(metadataToEncrypt, dek);
+				formData.append('encryptedMetadata', encMeta);
+				
+				console.log('File and metadata encrypted successfully!');
 			} catch (e) {
 				console.error('File encryption failed', e);
 				item.status = 'error';

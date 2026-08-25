@@ -71,10 +71,11 @@
 			encryptedVaultKey = wrappedKey;
 			recoveryPhrase = phrase;
 
+			isLoading = false;
 			showRecoveryModal = true;
 		} catch (err: any) {
-			console.error('Crypto generation failed', err);
-			alert('Failed to generate secure keys. Check console.');
+			console.error('Crypto error:', err);
+			alert('Failed to generate secure keys. Please try again.');
 			isLoading = false;
 		}
 	}
@@ -254,8 +255,7 @@
 
 					<button
 						type="submit"
-						disabled={isLoading}
-						class="mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#FF6B4A] px-6 py-3 text-sm font-bold text-[#0B0E14] transition-colors hover:bg-[#FF8264] disabled:opacity-50"
+						class="mb-4 flex w-full items-center justify-center gap-2 rounded-lg bg-[#FF6B4A] px-6 py-3 text-sm font-bold text-[#0B0E14] transition-colors hover:bg-[#FF8264] {isLoading ? 'opacity-50 pointer-events-none' : ''}"
 					>
 						{isLoading ? 'Creating Account...' : 'Create Account'}
 					</button>

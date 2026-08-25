@@ -12,24 +12,7 @@
 	let rawPassword = $state('');
 
 	let authHash = $state('');
-	let formElement = $state<HTMLFormElement | null>(null);
-
-	async function handleLogin() {
-		if (!username || !rawPassword) return;
-		isLoading = true;
-		try {
-			const { authHash: derivedAuthHash } = await deriveKeysFromPassword(rawPassword, username);
-			authHash = derivedAuthHash;
-
-			// Submit form programmatically after deriving hash
-			if (formElement) {
-				formElement.requestSubmit();
-			}
-		} catch (e) {
-			console.error('Crypto error', e);
-			isLoading = false;
-		}
-	}
+	let showPassword = $state(false);
 </script>
 
 <div
@@ -68,16 +51,23 @@
 			{/if}
 
 			<form
-				bind:this={formElement}
 				method="POST"
-				use:enhance={(e) => {
-					if (authHash === '') {
+				use:enhance={async (e) => {
+					isLoading = true;
+					try {
+						const { authHash: derivedAuthHash } = await deriveKeysFromPassword(
+							rawPassword,
+							username
+						);
+						e.formData.set('authHash', derivedAuthHash);
+					} catch (err) {
+						console.error('Crypto error', err);
 						e.cancel();
-						handleLogin();
+						isLoading = false;
 						return;
 					}
-					isLoading = true;
-					return async ({ result }) => {
+
+					return async ({ result, update }) => {
 						if (result.type === 'success' && result.data?.success) {
 							// Unwrap DEK with KEK
 							try {
@@ -91,12 +81,14 @@
 								console.error('Failed to unwrap vault key', err);
 								alert('Could not decrypt vault key. Please try again.');
 							}
+						} else {
+							await update({ reset: false });
 						}
 						isLoading = false;
 					};
 				}}
 			>
-				<input type="hidden" name="authHash" value={authHash} />
+				<input type="hidden" name="authHash" value="" />
 
 				<div class="mb-8 space-y-4">
 					<div class="group relative">
@@ -133,7 +125,7 @@
 								name="password"
 								id="password"
 								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
-								placeholder="••••••••"
+								placeholder="••••••••••"
 								type="password"
 								required
 							/>
