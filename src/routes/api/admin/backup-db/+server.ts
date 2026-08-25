@@ -1,17 +1,27 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
 import { uploadFileToTelegram } from '$lib/server/telegram';
-import { requireAdminAuth } from '$lib/server/authUtils';
+import { requireAdminAuth } from '$lib/server/adminAuth';
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		// 1. Verify Admin
 		requireAdminAuth(request);
 		
-		const { botToken, chatId } = await request.json();
-		if (!botToken || !chatId) {
-			return json({ success: false, message: 'Bot Token and Chat ID are required' }, { status: 400 });
+		let { botToken, chatId, nodeId } = await request.json();
+		
+		if (nodeId) {
+			// Fetch botToken and chatId from the database using nodeId
+			const nodeRes = await db.select().from(schema.telegramNodes).where(eq(schema.telegramNodes.id, nodeId));
+			if (nodeRes.length === 0) {
+				return json({ success: false, message: 'Node not found' }, { status: 404 });
+			}
+			botToken = nodeRes[0].botToken;
+			chatId = nodeRes[0].chatId;
+		} else if (!botToken || !chatId) {
+			return json({ success: false, message: 'Bot Token and Chat ID (or Node ID) are required' }, { status: 400 });
 		}
 
 		// 2. Dump entire database to JSON
@@ -37,11 +47,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// 4. Send to Telegram
 		const caption = `Shrimp Drive DB Backup\nDate: ${new Date().toISOString()}`;
-		const result = await uploadFileToTelegram(botToken, chatId, file, file.name, caption);
+		await uploadFileToTelegram(botToken, chatId, file, file.name, caption);
 		
-		if (!result.success) {
-			return json({ success: false, message: 'Failed to upload backup to Telegram' }, { status: 500 });
-		}
+		// If it reaches here, upload was successful (uploadFileToTelegram throws on error)
 
 		return json({ success: true, message: 'Database backed up successfully!' });
 	} catch (e: any) {
