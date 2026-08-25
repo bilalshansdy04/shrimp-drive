@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { users, emailVerificationTokens } from '$lib/server/db/schema';
+import * as schema from '$lib/server/db/schema';
 import { eq, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
@@ -19,6 +20,9 @@ export const actions: Actions = {
 		const displayName = data.get('displayName') as string;
 		const authHash = data.get('authHash') as string;
 		const encryptedVaultKey = data.get('encryptedVaultKey') as string;
+		
+		const botToken = data.get('botToken') as string | null;
+		const chatId = data.get('chatId') as string | null;
 
 		if (!username || !email || !displayName || !authHash || !encryptedVaultKey) {
 			return fail(400, { error: 'All fields are required.' });
@@ -39,13 +43,29 @@ export const actions: Actions = {
 		const userId = crypto.randomUUID();
 
 		try {
-			await db.insert(users).values({
+			let telegramNodeId = null;
+
+			if (botToken && chatId) {
+				telegramNodeId = crypto.randomUUID();
+				// Ensure telegramNodes is imported from schema! Wait, it is in `users, emailVerificationTokens`.
+				// I'll need to update the imports at the top.
+				await db.insert(schema.telegramNodes).values({
+					id: telegramNodeId,
+					name: `User Node - ${username}`,
+					botToken: botToken,
+					chatId: chatId,
+					isActive: true
+				});
+			}
+
+			await db.insert(schema.users).values({
 				id: userId,
 				username,
 				email,
 				displayName,
 				passwordHash,
 				encryptedVaultKey,
+				telegramNodeId, // <--- Assign node to user
 				emailVerified: 0
 			});
 

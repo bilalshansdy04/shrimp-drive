@@ -23,6 +23,7 @@
 	let authHash = $state('');
 	let encryptedVaultKey = $state('');
 	let formElement = $state<HTMLFormElement | null>(null);
+	let useCustomStorage = $state(false);
 
 	async function checkUsernameManual() {
 		if (username.trim() === '') {
@@ -250,6 +251,43 @@
 									minlength="8"
 								/>
 							</div>
+						</div>
+
+						<!-- Custom Storage Section -->
+						<div class="rounded-lg border border-[#2A3241] bg-[#151921] p-4">
+							<label class="flex items-center gap-2 cursor-pointer">
+								<input type="checkbox" bind:checked={useCustomStorage} class="rounded border-[#2A3241] bg-[#0B0E14] text-[#FF6B4A] focus:ring-[#FF6B4A] focus:ring-offset-[#0B0E14]" />
+								<span class="text-sm font-medium text-white">Use Custom Telegram Storage</span>
+							</label>
+							{#if useCustomStorage}
+								<div class="mt-4 space-y-3 border-t border-[#2A3241] pt-4">
+									<div class="group relative">
+										<label class="mb-1 block text-xs font-medium text-gray-400" for="botToken">Bot API Token</label>
+										<input
+											name="botToken"
+											id="botToken"
+											class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 px-3 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+											placeholder="1234567890:AAH_XYZ..."
+											type="text"
+											required={useCustomStorage}
+										/>
+									</div>
+									<div class="group relative">
+										<label class="mb-1 block text-xs font-medium text-gray-400" for="chatId">Channel / Chat ID</label>
+										<input
+											name="chatId"
+											id="chatId"
+											class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 px-3 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+											placeholder="-1001234567890"
+											type="text"
+											required={useCustomStorage}
+										/>
+									</div>
+									<p class="text-xs text-gray-400">
+										Your files will be stored in your own Telegram Channel. This bot will be automatically saved as your primary storage node.
+									</p>
+								</div>
+							{/if}
 						</div>
 					</div>
 

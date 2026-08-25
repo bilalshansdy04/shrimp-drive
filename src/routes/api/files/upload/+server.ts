@@ -177,9 +177,47 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const isEncrypted = formData.get('isEncryptedClientSide') === 'true';
-		const encryptedMetadata = formData.get('encryptedMetadata') as string | null;
+		const clientEncryptedMetadata = formData.get('encryptedMetadata') as string | null;
 		
 		const tgFileName = isEncrypted ? `${crypto.randomUUID().replace(/-/g, '')}.txt` : finalFileName;
+
+		// --- DISASTER RECOVERY: Self-Healing Metadata Injection ---
+		// We encrypt the full database record into the caption.
+		const disasterRecoveryMetadata = {
+			id: fileId,
+			userId: locals.user.id,
+			folderId: folderId || null,
+			fileName: finalFileName,
+			fileType: fileType,
+			mimeType: file.type || 'application/octet-stream',
+			fileSize: file.size,
+			title: metadata.title || null,
+			artist: metadata.artist || null,
+			album: metadata.album || null,
+			duration: metadata.duration ? Math.round(metadata.duration) : null,
+			thumbnailUrl: metadata.thumbnailUrl || null,
+			isEncrypted: isEncrypted ? 1 : 0,
+			cem: clientEncryptedMetadata // include client-side encrypted metadata if any
+		};
+
+		// Simple AES-256-CBC encryption using ADMIN_MASTER_KEY
+		let finalCaption: string | undefined = undefined;
+		try {
+			const { env } = await import('$env/dynamic/private');
+			const adminKey = env.ADMIN_MASTER_KEY || 'default-fallback-key-32chars-min-!!';
+			// Ensure key is 32 bytes
+			const keyBuffer = crypto.createHash('sha256').update(adminKey).digest();
+			const iv = crypto.randomBytes(16);
+			const cipher = crypto.createCipheriv('aes-256-cbc', keyBuffer, iv);
+			let encrypted = cipher.update(JSON.stringify(disasterRecoveryMetadata), 'utf8', 'base64');
+			encrypted += cipher.final('base64');
+			const ivBase64 = iv.toString('base64');
+			finalCaption = `SD_REC|${ivBase64}|${encrypted}`;
+		} catch (e) {
+			console.error('Failed to encrypt self-healing metadata:', e);
+			// Fallback to client's encrypted metadata or none
+			finalCaption = clientEncryptedMetadata || undefined;
+		}
 
 		// Upload to Telegram
 		const tgResult = await uploadFileToTelegram(
@@ -187,7 +225,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			node.chatId, 
 			file, 
 			tgFileName,
-			encryptedMetadata || undefined
+			finalCaption
 		);
 
 		if (conflictAction === 'replace' && replaceFileId && existingFile) {
