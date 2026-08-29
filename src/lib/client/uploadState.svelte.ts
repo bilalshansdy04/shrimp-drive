@@ -3,6 +3,14 @@ import { toast } from 'svelte-sonner';
 import { get } from 'svelte/store';
 import { encryptFileBlob, encryptMetadata } from '$lib/client/crypto';
 import { vaultKeyStore } from '$lib/client/encryptionStore';
+import { Buffer } from 'buffer';
+import process from 'process';
+
+if (typeof window !== 'undefined') {
+	(window as any).Buffer = (window as any).Buffer || Buffer;
+	(window as any).process = (window as any).process || process;
+}
+
 import * as musicMetadata from 'music-metadata-browser';
 
 export type UploadStatus =
@@ -303,7 +311,12 @@ class UploadState {
 			formData.append('replaceFileId', item.replaceFileId);
 		}
 
-		if (item.file.type.startsWith('audio/')) {
+		const ext = item.file.name.split('.').pop()?.toLowerCase() || '';
+		const isAudio = item.file.type.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'].includes(ext);
+		const isVideo = item.file.type.startsWith('video/') || ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'wmv'].includes(ext);
+		const isImage = item.file.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'svg', 'tiff', 'raw'].includes(ext);
+
+		if (isAudio) {
 			try {
 				const audioMeta = await musicMetadata.parseBlob(item.file);
 				if (audioMeta.common.title) formData.append('audioTitle', audioMeta.common.title);
@@ -320,7 +333,7 @@ class UploadState {
 			} catch (e) {
 				console.error('Audio metadata extraction failed', e);
 			}
-		} else if (item.file.type.startsWith('video/')) {
+		} else if (isVideo) {
 			try {
 				const videoInfo = await new Promise<{ dataUrl: string | null; duration: number }>(
 					(resolve) => {
@@ -375,7 +388,7 @@ class UploadState {
 			} catch (e) {
 				console.error('Thumbnail extraction failed', e);
 			}
-		} else if (item.file.type.startsWith('image/')) {
+		} else if (isImage) {
 			try {
 				const imageThumbnail = await new Promise<string | null>((resolve) => {
 					const img = new window.Image();
