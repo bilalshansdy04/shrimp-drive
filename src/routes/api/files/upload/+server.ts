@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { users, files } from '$lib/server/db/schema';
+import { users, files, telegramNodes, encryptionKeys } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { uploadFileToTelegram } from '$lib/server/telegram';
 import { parseBuffer } from 'music-metadata';
@@ -99,7 +99,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Fetch Telegram Node
-		const { telegramNodes, encryptionKeys } = await import('$lib/server/db/schema');
 		const nodeResult = await db
 			.select()
 			.from(telegramNodes)
@@ -195,7 +194,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			artist: metadata.artist || null,
 			album: metadata.album || null,
 			duration: metadata.duration ? Math.round(metadata.duration) : null,
-			thumbnailUrl: metadata.thumbnailUrl || null,
+			// Omit base64 data URLs to prevent exceeding Telegram's 1024-character caption limit
+			thumbnailUrl: metadata.thumbnailUrl?.startsWith('data:') ? null : metadata.thumbnailUrl,
 			isEncrypted: isEncrypted ? 1 : 0,
 			cem: clientEncryptedMetadata // include client-side encrypted metadata if any
 		};

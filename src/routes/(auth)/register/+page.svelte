@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { AtSign, Key, UserPlus, Mail, Check, X } from 'lucide-svelte';
+	import { AtSign, Key, UserPlus, Mail, Check, X, Eye, EyeOff } from 'lucide-svelte';
 	import { enhance } from '$app/forms';
 	import {
 		generateMasterVaultKey,
@@ -23,7 +23,10 @@
 	let authHash = $state('');
 	let encryptedVaultKey = $state('');
 	let formElement = $state<HTMLFormElement | null>(null);
-	let useCustomStorage = $state(false);
+
+	let confirmPassword = $state('');
+	let showPassword = $state(false);
+	let showConfirmPassword = $state(false);
 
 	async function checkUsernameManual() {
 		if (username.trim() === '') {
@@ -46,6 +49,11 @@
 	async function handleFormSubmit() {
 		if (isUsernameAvailable !== true) {
 			alert('Silakan tekan tombol Check untuk memverifikasi ketersediaan Username Anda.');
+			return;
+		}
+
+		if (rawPassword !== confirmPassword) {
+			alert('Password dan Confirm Password tidak cocok.');
 			return;
 		}
 
@@ -231,63 +239,64 @@
 							</div>
 						</div>
 						<div class="group relative">
-							<label class="mb-1 block text-xs font-medium text-gray-400" for="password"
-								>Password</label
-							>
+							<label class="mb-1 block text-xs font-medium text-gray-400" for="password">Password</label>
 							<div class="relative flex items-center">
 								<Key
 									class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]"
 									size={20}
 								/>
-								<!-- Note: name="password" is still present so the browser autocomplete works, but the server will read authHash instead -->
 								<input
 									bind:value={rawPassword}
 									name="password"
 									id="password"
-									class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+									class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-10 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 									placeholder="••••••••"
-									type="password"
+									type={showPassword ? "text" : "password"}
 									required
 									minlength="8"
 								/>
+								<button
+									type="button"
+									class="absolute right-3 text-gray-500 hover:text-gray-300 transition-colors"
+									onclick={() => showPassword = !showPassword}
+								>
+									{#if showPassword}
+										<Eye size={18} />
+									{:else}
+										<EyeOff size={18} />
+									{/if}
+								</button>
 							</div>
 						</div>
-
-						<!-- Custom Storage Section -->
-						<div class="rounded-lg border border-[#2A3241] bg-[#151921] p-4">
-							<label class="flex items-center gap-2 cursor-pointer">
-								<input type="checkbox" bind:checked={useCustomStorage} class="rounded border-[#2A3241] bg-[#0B0E14] text-[#FF6B4A] focus:ring-[#FF6B4A] focus:ring-offset-[#0B0E14]" />
-								<span class="text-sm font-medium text-white">Use Custom Telegram Storage</span>
-							</label>
-							{#if useCustomStorage}
-								<div class="mt-4 space-y-3 border-t border-[#2A3241] pt-4">
-									<div class="group relative">
-										<label class="mb-1 block text-xs font-medium text-gray-400" for="botToken">Bot API Token</label>
-										<input
-											name="botToken"
-											id="botToken"
-											class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 px-3 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
-											placeholder="1234567890:AAH_XYZ..."
-											type="text"
-											required={useCustomStorage}
-										/>
-									</div>
-									<div class="group relative">
-										<label class="mb-1 block text-xs font-medium text-gray-400" for="chatId">Channel / Chat ID</label>
-										<input
-											name="chatId"
-											id="chatId"
-											class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 px-3 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
-											placeholder="-1001234567890"
-											type="text"
-											required={useCustomStorage}
-										/>
-									</div>
-									<p class="text-xs text-gray-400">
-										Your files will be stored in your own Telegram Channel. This bot will be automatically saved as your primary storage node.
-									</p>
-								</div>
-							{/if}
+						<div class="group relative">
+							<label class="mb-1 block text-xs font-medium text-gray-400" for="confirmPassword">Confirm Password</label>
+							<div class="relative flex items-center">
+								<Key
+									class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]"
+									size={20}
+								/>
+								<input
+									bind:value={confirmPassword}
+									name="confirmPassword"
+									id="confirmPassword"
+									class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-10 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+									placeholder="••••••••"
+									type={showConfirmPassword ? "text" : "password"}
+									required
+									minlength="8"
+								/>
+								<button
+									type="button"
+									class="absolute right-3 text-gray-500 hover:text-gray-300 transition-colors"
+									onclick={() => showConfirmPassword = !showConfirmPassword}
+								>
+									{#if showConfirmPassword}
+										<Eye size={18} />
+									{:else}
+										<EyeOff size={18} />
+									{/if}
+								</button>
+							</div>
 						</div>
 					</div>
 

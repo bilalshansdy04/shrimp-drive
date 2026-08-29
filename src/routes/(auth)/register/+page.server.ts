@@ -43,21 +43,6 @@ export const actions: Actions = {
 		const userId = crypto.randomUUID();
 
 		try {
-			let telegramNodeId = null;
-
-			if (botToken && chatId) {
-				telegramNodeId = crypto.randomUUID();
-				// Ensure telegramNodes is imported from schema! Wait, it is in `users, emailVerificationTokens`.
-				// I'll need to update the imports at the top.
-				await db.insert(schema.telegramNodes).values({
-					id: telegramNodeId,
-					name: `User Node - ${username}`,
-					botToken: botToken,
-					chatId: chatId,
-					isActive: true
-				});
-			}
-
 			await db.insert(schema.users).values({
 				id: userId,
 				username,
@@ -65,7 +50,6 @@ export const actions: Actions = {
 				displayName,
 				passwordHash,
 				encryptedVaultKey,
-				telegramNodeId, // <--- Assign node to user
 				emailVerified: 0
 			});
 
