@@ -99,8 +99,7 @@
 								goto((result.data?.redirectTo as string) || '/dashboard');
 							} catch (err) {
 								console.error('Failed to unwrap vault key', err);
-								form = { error: '' }; // Clear old error visually
-								alert('Could not decrypt vault key. Please try again.');
+								form = { error: 'Login gagal karena kunci error. Harap ulangi kembali' };
 							}
 						} else {
 							await update({ reset: false });
