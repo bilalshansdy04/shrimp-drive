@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { requireAdminAuth } from '$lib/server/adminAuth';
 import { db } from '$lib/server/db';
-import { users, storageBonuses } from '$lib/server/db/schema';
+import { users, storageBonuses, invitationCodes } from '$lib/server/db/schema';
 import { desc, eq, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
@@ -19,6 +19,7 @@ export const GET: RequestHandler = async ({ request }) => {
 			storageLimit: users.storageLimit,
 			baseStorage: users.baseStorage,
 			invitationBonusStorage: sql<number>`COALESCE(SUM(${storageBonuses.amount}), 0)`,
+			invitationCodeUsed: sql<string>`MAX(${invitationCodes.code})`,
 			customStorageBonus: users.customStorageBonus,
 			isSuspended: users.isSuspended,
 			isActive: users.isActive,
@@ -27,6 +28,7 @@ export const GET: RequestHandler = async ({ request }) => {
 		})
 		.from(users)
 		.leftJoin(storageBonuses, eq(users.id, storageBonuses.userId))
+		.leftJoin(invitationCodes, eq(storageBonuses.invitationCodeId, invitationCodes.id))
 		.groupBy(users.id)
 		.orderBy(desc(users.createdAt));
 

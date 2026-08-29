@@ -73,7 +73,7 @@
 	});
 
 	let storagePercentage = $derived(
-		data.user ? Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
+		data.user ? data.user.storageLimit === -1 ? 0 : Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
 	);
 
 	let isVaultLocked = $state(false);
@@ -278,9 +278,7 @@
 				<div class="mb-2 flex justify-between text-xs text-gray-400">
 					<span>Storage (Telegram)</span>
 					<span
-						>{formatBytes(data.user?.storageUsed || 0)} / {formatBytes(
-							data.user?.storageLimit || 0
-						)}</span
+						>{formatBytes(data.user?.storageUsed || 0)} / {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}</span
 					>
 				</div>
 				<div class="h-1.5 w-full overflow-hidden rounded-full bg-[#0B0E14]">

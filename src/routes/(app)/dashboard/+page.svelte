@@ -48,7 +48,7 @@
 	);
 
 	let percentage = $derived(
-		data.user ? Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
+		data.user ? data.user.storageLimit === -1 ? 0 : Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
 	);
 
 	let circumference = 2 * Math.PI * 15.9155;
@@ -154,7 +154,7 @@
 			</div>
 			<h3 class="text-sm font-medium text-gray-400">Total Storage</h3>
 			<p class="mt-1 text-xs text-gray-500">
-				{formatBytes(data.user?.storageUsed || 0)} / {formatBytes(data.user?.storageLimit || 0)}
+				{formatBytes(data.user?.storageUsed || 0)} / {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}
 			</p>
 		</div>
 

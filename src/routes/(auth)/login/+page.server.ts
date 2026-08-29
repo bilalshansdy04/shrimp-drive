@@ -6,8 +6,13 @@ import { eq, count, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { createSession, generateSessionToken } from '$lib/server/auth';
 
-export const load: PageServerLoad = async () => {
-	return {};
+export const load: PageServerLoad = async ({ url }) => {
+	const error = url.searchParams.get('error');
+	let errorMessage = '';
+	if (error === 'suspended') {
+		errorMessage = 'Your account has been suspended or deactivated. Please contact the administrator.';
+	}
+	return { errorMessage };
 };
 
 export const actions: Actions = {
@@ -38,8 +43,8 @@ export const actions: Actions = {
 			return fail(403, { error: 'Please verify your email before logging in.' });
 		}
 
-		if (!user.isActive) {
-			return fail(403, { error: 'Your account has been deactivated.' });
+		if (!user.isActive || user.isSuspended) {
+			return fail(403, { error: 'Your account has been suspended or deactivated.' });
 		}
 
 		const isPasswordValid = await bcrypt.compare(authHash, user.passwordHash);
@@ -62,6 +67,7 @@ export const actions: Actions = {
 		return {
 			success: true,
 			encryptedVaultKey: user.encryptedVaultKey,
+			actualUsername: user.username,
 			redirectTo: '/dashboard'
 		};
 	}

@@ -40,7 +40,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return json({ error: 'File size exceeds 20MB limit.' }, { status: 400 });
 		}
 
-		if (locals.user.storageUsed + file.size > locals.user.storageLimit) {
+		if (locals.user.storageLimit !== -1 && locals.user.storageUsed + file.size > locals.user.storageLimit) {
 			return json({ error: 'Storage Limit Exceeded' }, { status: 403 });
 		}
 

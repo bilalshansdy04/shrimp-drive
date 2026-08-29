@@ -5,14 +5,28 @@
 	import { saveVaultKeyToSession } from '$lib/client/encryptionStore';
 	import { goto } from '$app/navigation';
 
-	let { form } = $props<{ form: any }>();
+	let { form, data } = $props<{ form: any, data: any }>();
 	let isLoading = $state(false);
 
 	let username = $state('');
 	let rawPassword = $state('');
 
 	let authHash = $state('');
-	let showPassword = $state(false);
+
+	async function handleFormSubmit() {
+		isLoading = true;
+
+		try {
+			// Instead of generating DEK, we just derive KEK to compute authHash
+			// (We need authHash for authentication, NOT for generating a new vault)
+			const { authHash: derivedAuthHash } = await deriveKeysFromPassword(rawPassword, username);
+			authHash = derivedAuthHash;
+		} catch (err: any) {
+			console.error('Crypto error:', err);
+			alert('Failed to process login. Please try again.');
+			isLoading = false;
+		}
+	}
 </script>
 
 <div
@@ -38,12 +52,17 @@
 				/>
 				<h1 class="text-3xl font-bold text-white">Shrimp Drive</h1>
 			</div>
-			<p class="text-sm text-gray-400">Sign in to your private storage.</p>
+			<p class="text-sm text-gray-400">Welcome back to your private space.</p>
 		</header>
 
 		<div
 			class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.5)]"
 		>
+			{#if data.errorMessage}
+				<div class="mb-4 rounded-lg bg-[#93000a] px-4 py-2 text-sm font-medium text-[#ffdad6]">
+					{data.errorMessage}
+				</div>
+			{/if}
 			{#if form?.error}
 				<div class="mb-4 rounded-lg bg-[#93000a] px-4 py-2 text-sm font-medium text-[#ffdad6]">
 					{form.error}
@@ -72,13 +91,15 @@
 							// Unwrap DEK with KEK
 							try {
 								if (result.data && result.data.encryptedVaultKey) {
-									const { kek } = await deriveKeysFromPassword(rawPassword, username);
+									const actualUsername = result.data.actualUsername as string;
+									const { kek } = await deriveKeysFromPassword(rawPassword, actualUsername);
 									const dek = await unwrapMasterKey(result.data.encryptedVaultKey as string, kek);
 									saveVaultKeyToSession(dek);
 								}
 								goto((result.data?.redirectTo as string) || '/dashboard');
 							} catch (err) {
 								console.error('Failed to unwrap vault key', err);
+								form = { error: '' }; // Clear old error visually
 								alert('Could not decrypt vault key. Please try again.');
 							}
 						} else {

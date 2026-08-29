@@ -49,7 +49,7 @@
 	let selectedDestinationId = $state<string | null>(null);
 
 	let percentage = $derived(
-		data.user ? Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
+		data.user ? data.user.storageLimit === -1 ? 0 : Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
 	);
 	let circumference = 2 * Math.PI * 15.9155;
 	let dashoffset = $derived(circumference - (percentage / 100) * circumference);
@@ -251,9 +251,7 @@
 		<div class="flex-1">
 			<h2 class="text-lg font-bold text-white">Storage Overview</h2>
 			<p class="text-sm text-gray-400">
-				{formatBytes(data.user?.storageUsed || 0)} used of {formatBytes(
-					data.user?.storageLimit || 0
-				)}
+				{formatBytes(data.user?.storageUsed || 0)} used of {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}
 			</p>
 		</div>
 	</div>

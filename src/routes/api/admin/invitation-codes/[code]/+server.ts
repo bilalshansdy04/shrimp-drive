@@ -66,34 +66,16 @@ export const DELETE: RequestHandler = async ({ request, params }) => {
 		throw error(404, 'Invitation code not found');
 	}
 
-	// Find affected bonuses to update users' storage limit
-	const affectedBonuses = await db
-		.select()
-		.from(storageBonuses)
-		.where(eq(storageBonuses.invitationCodeId, existingCode[0].id));
-
-	for (const bonus of affectedBonuses) {
-		if (bonus.userId) {
-			// Instead of manual math, just call the recalculate helper AFTER deleting the bonus.
-			// But wait, the bonus is deleted by cascade below.
-			// So we need to store the userIds, delete the code (which deletes bonuses), then recalculate.
-		}
+	if (existingCode[0].usedCount > 0) {
+		throw error(400, 'Cannot delete an invitation code that has already been used');
 	}
 
-	const userIdsToRecalculate = [
-		...new Set(affectedBonuses.map((b) => b.userId).filter(Boolean))
-	] as string[];
-
-	// This will cascade delete the storage_bonuses rows due to foreign key
+	// This will cascade delete the storage_bonuses rows due to foreign key (if cascade is enabled) or leave them.
+	// But since we prevent deletion of used codes, we don't need to worry about recalculating storage limits here.
 	const deletedCode = await db
 		.delete(invitationCodes)
 		.where(eq(invitationCodes.code, params.code))
 		.returning();
-
-	// Now that bonuses are deleted, recalculate limits
-	for (const uId of userIdsToRecalculate) {
-		await recalculateUserStorageLimit(uId);
-	}
 
 	return json({ success: true, deletedCode: params.code });
 };

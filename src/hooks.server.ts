@@ -68,9 +68,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	if (event.locals.user) {
-		if (event.locals.user.isSuspended) {
+		if (event.locals.user.isSuspended || !event.locals.user.isActive) {
 			if (pathname.startsWith('/api/')) {
-				return new Response(JSON.stringify({ error: 'Account Suspended' }), {
+				return new Response(JSON.stringify({ error: 'Account Suspended or Deactivated' }), {
 					status: 403,
 					headers: { 'Content-Type': 'application/json' }
 				});
