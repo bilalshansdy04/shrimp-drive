@@ -19,6 +19,7 @@
 
 	let showRecoveryModal = $state(false);
 	let recoveryPhrase = $state('');
+	let hasDownloadedPhrase = $state(false);
 
 	let authHash = $state('');
 	let encryptedVaultKey = $state('');
@@ -27,6 +28,17 @@
 	let confirmPassword = $state('');
 	let showPassword = $state(false);
 	let showConfirmPassword = $state(false);
+
+	function downloadPhrase() {
+		const blob = new Blob([recoveryPhrase], { type: 'text/plain' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = 'ShrimpDrive_Recovery_Phrase.txt';
+		a.click();
+		URL.revokeObjectURL(url);
+		hasDownloadedPhrase = true;
+	}
 
 	async function checkUsernameManual() {
 		if (username.trim() === '') {
@@ -364,12 +376,27 @@
 							</div>
 
 							<div class="flex flex-col gap-3">
-								<button
-									onclick={confirmRecoverySaved}
-									class="w-full rounded-lg bg-[#FF6B4A] py-3 text-sm font-bold text-black transition-colors hover:bg-[#ff8264]"
-								>
-									I have safely stored this phrase
-								</button>
+								{#if hasDownloadedPhrase}
+									<button
+										onclick={downloadPhrase}
+										class="w-full rounded-lg border border-[#FF6B4A] py-2 text-sm font-bold text-[#FF6B4A] transition-colors hover:bg-[#FF6B4A]/10"
+									>
+										Download Again
+									</button>
+									<button
+										onclick={confirmRecoverySaved}
+										class="w-full rounded-lg bg-[#FF6B4A] py-3 text-sm font-bold text-black transition-colors hover:bg-[#ff8264]"
+									>
+										I have safely stored this phrase
+									</button>
+								{:else}
+									<button
+										onclick={downloadPhrase}
+										class="w-full rounded-lg bg-[#FF6B4A] py-3 text-sm font-bold text-black transition-colors hover:bg-[#ff8264]"
+									>
+										Download Recovery Phrase (.txt)
+									</button>
+								{/if}
 							</div>
 						</div>
 					</div>

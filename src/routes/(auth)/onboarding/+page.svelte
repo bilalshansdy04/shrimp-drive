@@ -14,7 +14,7 @@
 	import { deriveKeysFromPassword, generateMasterVaultKey, wrapMasterKey } from '$lib/client/crypto';
 	import { saveVaultKeyToSession } from '$lib/client/encryptionStore';
 
-	let { data } = $props<{ data: { hasPassword: boolean; hasEncryptedVaultKey: boolean; email: string } }>();
+	let { data } = $props<{ data: { hasPassword: boolean; hasEncryptedVaultKey: boolean; email: string; username: string } }>();
 
 	// Flow:
 	// 1: Choose Backend (Global vs Custom)
@@ -165,7 +165,7 @@
 			// If they don't have a password, they must have set a PIN in step 5
 			if (!data.hasPassword && vaultPin.length >= 6) {
 				// 1. Derive KEK and authHash
-				const keys = await deriveKeysFromPassword(vaultPin, data.email);
+				const keys = await deriveKeysFromPassword(vaultPin, data.username);
 				authHash = keys.authHash;
 				
 				// 2. Generate Master Key (DEK)

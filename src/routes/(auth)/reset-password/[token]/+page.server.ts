@@ -26,12 +26,14 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	const userResult = await db.select({ 
 		email: users.email,
-		googleId: users.googleId 
+		googleId: users.googleId,
+		username: users.username
 	}).from(users).where(eq(users.id, resetToken.userId));
 
 	return { 
 		token: resetToken.token,
 		email: userResult.length > 0 ? userResult[0].email : '',
+		username: userResult.length > 0 ? userResult[0].username : '',
 		hasGoogleId: userResult.length > 0 ? userResult[0].googleId !== null : false
 	};
 };

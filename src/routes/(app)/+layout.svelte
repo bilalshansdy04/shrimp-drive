@@ -80,6 +80,7 @@
 	let unlockPin = $state('');
 	let isUnlocking = $state(false);
 	let unlockError = $state('');
+	let failedAttempts = $state(0);
 
 	$effect(() => {
 		if (data.user?.encryptedVaultKey) {
@@ -100,14 +101,27 @@
 		unlockError = '';
 
 		try {
-			const keys = await deriveKeysFromPassword(unlockPin, data.user.email);
+			const keys = await deriveKeysFromPassword(unlockPin, data.user.username);
 			const masterKey = await unwrapMasterKey(data.user.encryptedVaultKey, keys.kek);
 			saveVaultKeyToSession(masterKey);
 			isVaultLocked = false;
 			unlockPin = '';
+			failedAttempts = 0;
 		} catch (err) {
 			console.error(err);
-			unlockError = 'Incorrect Vault PIN or Password.';
+			failedAttempts++;
+			const errorMessages = [
+				'Incorrect Vault PIN or Password.',
+				'Invalid credentials. Please try again.',
+				'Decryption failed. Wrong PIN/Password.',
+				'Access denied. Verify your password.',
+				'Uh oh! That PIN or Password was incorrect.'
+			];
+			unlockError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
+			
+			if (failedAttempts >= 3) {
+				toast.error('Gagal 3 kali? Jika Anda baru saja mengubah password/PIN, coba refresh halaman ini dan masukkan password baru Anda.', { duration: 6000 });
+			}
 		}
 		isUnlocking = false;
 	}
@@ -136,7 +150,7 @@
 				</div>
 				<h2 class="text-xl font-bold text-white">Your Vault is Locked</h2>
 				<p class="mt-2 text-sm text-gray-400">
-					Please enter your Vault PIN (or Password) to unlock your files for this session.
+					Please enter your {data.user?.googleId ? 'Vault PIN' : 'Account Password'} to unlock your files for this session.
 				</p>
 			</div>
 			
@@ -146,7 +160,7 @@
 					<input
 						bind:value={unlockPin}
 						type="password"
-						placeholder="Vault PIN / Password"
+						placeholder={data.user?.googleId ? 'Enter Vault PIN' : 'Enter Password'}
 						required
 						class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-3 pr-4 pl-10 text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 					/>

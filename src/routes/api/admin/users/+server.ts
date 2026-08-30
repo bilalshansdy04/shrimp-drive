@@ -24,6 +24,7 @@ export const GET: RequestHandler = async ({ request }) => {
 			isSuspended: users.isSuspended,
 			isActive: users.isActive,
 			telegramNodeId: users.telegramNodeId,
+			googleId: users.googleId,
 			createdAt: users.createdAt
 		})
 		.from(users)

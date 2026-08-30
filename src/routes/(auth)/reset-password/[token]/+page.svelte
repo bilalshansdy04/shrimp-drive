@@ -34,18 +34,19 @@
 				return;
 			}
 		}
-		if (recoveryPhrase.trim().split(/\s+/).length !== 12) {
-			localError = 'Recovery phrase must be exactly 12 words.';
+		const wordCount = recoveryPhrase.trim().split(/\s+/).length;
+		if (wordCount !== 12 && wordCount !== 24) {
+			localError = 'Recovery phrase must be exactly 12 or 24 words.';
 			return;
 		}
 
 		isLoading = true;
 		try {
-			// 1. Recover DEK from 12 words
+			// 1. Recover DEK from 24 words
 			const dek = recoverMasterKeyFromPhrase(recoveryPhrase.trim());
 			
 			// 2. Derive KEK and AuthHash from new password
-			const keys = await deriveKeysFromPassword(newPassword, data.email);
+			const keys = await deriveKeysFromPassword(newPassword, data.username);
 			authHash = keys.authHash;
 
 			// 3. Wrap the DEK with the new KEK
@@ -57,7 +58,7 @@
 			}, 100);
 		} catch (err: any) {
 			console.error('Crypto error during recovery', err);
-			localError = 'Invalid recovery phrase. Check your 12 words.';
+			localError = 'Invalid recovery phrase. Check your 12 or 24 words.';
 			isLoading = false;
 		}
 	}
@@ -66,19 +67,9 @@
 <div class="flex min-h-screen items-center justify-center bg-[#0B0E14] p-6 text-white">
 	<div class="w-full max-w-[400px] rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-lg">
 		<h1 class="mb-2 text-2xl font-bold">Reset Password & Vault</h1>
-		<p class="mb-6 text-sm text-gray-400">Enter your 12-Word Recovery Phrase and a new password.</p>
+		<p class="mb-6 text-sm text-gray-400">Enter your Recovery Phrase (12 or 24 words) and a new password.</p>
 
-		{#if data.error}
-			<div class="mb-6 rounded-lg bg-[#93000a] p-4 text-[#ffdad6]">
-				{data.error}
-			</div>
-			<a
-				href="/forgot-password"
-				class="inline-block w-full rounded-lg border border-[#2A3241] px-6 py-2 text-center text-sm font-medium hover:bg-[#2A3241]"
-			>
-				Request New Link
-			</a>
-		{:else if form?.success}
+		{#if form?.success}
 			<div class="mb-6 rounded-lg bg-[#00390f] p-4 text-[#73f382]">
 				{form.success}
 			</div>
@@ -87,6 +78,16 @@
 				class="inline-block w-full rounded-lg bg-[#FF6B4A] px-6 py-3 text-center text-sm font-bold text-[#0B0E14] hover:bg-[#FF8264]"
 			>
 				Continue to Login
+			</a>
+		{:else if data.error}
+			<div class="mb-6 rounded-lg bg-[#93000a] p-4 text-[#ffdad6]">
+				{data.error}
+			</div>
+			<a
+				href="/forgot-password"
+				class="inline-block w-full rounded-lg border border-[#2A3241] px-6 py-2 text-center text-sm font-medium hover:bg-[#2A3241]"
+			>
+				Request New Link
 			</a>
 		{:else}
 			{#if form?.error}
@@ -122,7 +123,7 @@
 				<div class="mb-6 space-y-4">
 					<div class="group relative">
 						<label class="mb-1 block text-xs font-medium text-gray-400" for="phrase"
-							>12-Word Recovery Phrase</label
+							>12 or 24-Word Recovery Phrase</label
 						>
 						<div class="relative flex items-center">
 							<Shield

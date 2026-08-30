@@ -47,7 +47,7 @@
 
 		try {
 			// Same as login: derive authHash from password
-			const { authHash } = await deriveKeysFromPassword(revealPassword, data.user.email);
+			const { authHash } = await deriveKeysFromPassword(revealPassword, data.user.username);
 
 			const res = await fetch('/api/profile/request-key-reveal', {
 				method: 'POST',
@@ -210,12 +210,12 @@
 						// 1. If user has existing password/PIN, derive old auth hash
 						let currentAuthHash = '';
 						if (data.user.passwordHash) {
-							const oldKeys = await deriveKeysFromPassword(currentPassword, data.user.email);
+							const oldKeys = await deriveKeysFromPassword(currentPassword, data.user.username);
 							currentAuthHash = oldKeys.authHash;
 						}
 
 						// 2. Derive new keys
-						const newKeys = await deriveKeysFromPassword(newPassword, data.user.email);
+						const newKeys = await deriveKeysFromPassword(newPassword, data.user.username);
 
 						// 3. Get or generate DEK
 						let dek = get(vaultKeyStore);
@@ -247,6 +247,7 @@
 						alert(`${isGoogle ? 'PIN' : 'Password'} updated successfully!`);
 						
 						formEl.reset();
+						window.location.reload();
 					} catch (err: any) {
 						console.error(err);
 						alert(err.message || `Failed to update ${isGoogle ? 'PIN' : 'password'}.`);
@@ -426,7 +427,7 @@
 					{#if isKeyRevealed && recoveryPhrase}
 						<div class="mt-4 rounded-lg border border-[#FF6B4A]/30 bg-[#FF6B4A]/5 p-4">
 							<div class="mb-4 flex items-center justify-between">
-								<h4 class="text-sm font-bold text-white">Your 12-Word Recovery Phrase</h4>
+								<h4 class="text-sm font-bold text-white">Your {recoveryPhrase.split(' ').length}-Word Recovery Phrase</h4>
 								<button
 									onclick={() => {
 										const blob = new Blob([recoveryPhrase], { type: 'text/plain' });

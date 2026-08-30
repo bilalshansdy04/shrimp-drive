@@ -1,4 +1,4 @@
-﻿import type { PageServerLoad } from './$types';
+import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -9,7 +9,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		hasPassword: !!locals.user.passwordHash,
 		hasEncryptedVaultKey: !!locals.user.encryptedVaultKey,
-		email: locals.user.email
+		email: locals.user.email,
+		username: locals.user.username
 	};
 };
 
