@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown, ChevronUp, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-svelte';
+	import { ChevronDown, ChevronUp, X, CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-svelte';
 	import { uploadState } from '$lib/client/uploadState.svelte';
 
 	let isExpanded = $state(true);
@@ -140,6 +140,15 @@
 							{/if}
 
 							{#if item.status !== 'completed'}
+								{#if item.status === 'error'}
+									<button
+										class="text-amber-500 transition-colors hover:text-amber-400"
+										onclick={() => uploadState.retryItem(item.id)}
+										title="Retry"
+									>
+										<RefreshCw size={16} />
+									</button>
+								{/if}
 								<button
 									class="text-gray-500 transition-colors hover:text-white"
 									onclick={() => uploadState.cancelItem(item.id)}

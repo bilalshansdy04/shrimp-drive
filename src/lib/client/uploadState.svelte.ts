@@ -150,6 +150,22 @@ class UploadState {
 		this.removeFile(id);
 	}
 
+	retryItem(id: string) {
+		const item = this.items.find((i) => i.id === id);
+		if (item && item.status === 'error') {
+			item.status = 'idle';
+			item.progress = 0;
+			item.errorMsg = undefined;
+			item._sendFinished = false;
+			item._sendSuccess = undefined;
+			item._sendErr = undefined;
+			item._resolveSend = undefined;
+			
+			this.processUploadQueue();
+			this.processSendingQueue();
+		}
+	}
+
 	resolveConflict(id: string, action: 'skip' | 'continue' | 'replace') {
 		const item = this.items.find((i) => i.id === id);
 		if (!item || item.status !== 'conflict') return;
