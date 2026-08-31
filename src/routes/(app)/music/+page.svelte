@@ -21,7 +21,8 @@
 		ArrowUpDown,
 		Check,
 		Download,
-		X
+		X,
+		Loader2
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import { media } from '$lib/client/mediaState.svelte';
@@ -369,10 +370,14 @@
 					</p>
 				</div>
 				<button
-					onclick={() => media.togglePlay()}
+					onclick={() => {
+						if (!media.isLoadingTrack) media.togglePlay();
+					}}
 					class="flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
 				>
-					{#if media.isPaused}
+					{#if media.isLoadingTrack}
+						<Loader2 size={24} class="animate-spin text-white" />
+					{:else if media.isPaused}
 						<Play size={24} fill="currentColor" class="ml-1" />
 					{:else}
 						<Pause size={24} fill="currentColor" />
@@ -576,16 +581,26 @@
 													<Check size={12} class="text-black" />
 												{/if}
 											</div>
-										{:else if media.currentTrack?.id === track.id && !media.isPaused}
-											<div class="text-primary-container mx-auto h-3 w-3">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													viewBox="0 0 24 24"
-													fill="currentColor"
-												>
-													<polygon points="5 3 19 12 5 21 5 3"></polygon>
-												</svg>
-											</div>
+										{:else if media.currentTrack?.id === track.id}
+											{#if media.isLoadingTrack}
+												<div class="mx-auto flex h-full items-center justify-center text-primary">
+													<Loader2 size={14} class="animate-spin" />
+												</div>
+											{:else if !media.isPaused}
+												<div class="text-primary-container mx-auto h-3 w-3">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														viewBox="0 0 24 24"
+														fill="currentColor"
+													>
+														<polygon points="5 3 19 12 5 21 5 3"></polygon>
+													</svg>
+												</div>
+											{:else}
+												<div class="text-gray-400 mx-auto h-3 w-3">
+													<span class="text-xs font-bold font-mono">{(index + 1).toString().padStart(2, '0')}</span>
+												</div>
+											{/if}
 										{:else}
 											<span class="text-xs text-gray-500 group-hover:hidden">{index + 1}</span>
 											<Play
@@ -693,7 +708,9 @@
 									<div
 										class="flex h-12 w-12 items-center justify-center rounded-full bg-[#FF6B4A] text-black shadow-lg"
 									>
-										{#if media.currentTrack?.id === track.id && !media.isPaused}
+										{#if media.currentTrack?.id === track.id && media.isLoadingTrack}
+											<Loader2 size={24} class="animate-spin text-black" />
+										{:else if media.currentTrack?.id === track.id && !media.isPaused}
 											<Pause size={24} fill="currentColor" />
 										{:else}
 											<Play size={24} fill="currentColor" class="ml-1" />
@@ -776,9 +793,13 @@
 				</button>
 				<button
 					class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
-					onclick={() => media.togglePlay()}
+					onclick={() => {
+						if (!media.isLoadingTrack) media.togglePlay();
+					}}
 				>
-					{#if media.isPaused}
+					{#if media.isLoadingTrack}
+						<Loader2 size={18} class="animate-spin text-black" />
+					{:else if media.isPaused}
 						<Play size={18} fill="currentColor" class="ml-0.5" />
 					{:else}
 						<Pause size={18} fill="currentColor" />
@@ -799,9 +820,13 @@
 				>
 				<button
 					class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
-					onclick={() => media.togglePlay()}
+					onclick={() => {
+						if (!media.isLoadingTrack) media.togglePlay();
+					}}
 				>
-					{#if media.isPaused}
+					{#if media.isLoadingTrack}
+						<Loader2 size={18} class="animate-spin text-black" />
+					{:else if media.isPaused}
 						<Play size={18} fill="currentColor" class="ml-0.5" />
 					{:else}
 						<Pause size={18} fill="currentColor" />

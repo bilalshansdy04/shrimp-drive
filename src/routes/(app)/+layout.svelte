@@ -13,7 +13,8 @@
 		LogOut,
 		Menu,
 		X,
-		Lock
+		Lock,
+		Loader2
 	} from 'lucide-svelte';
 	import { deriveKeysFromPassword, unwrapMasterKey } from '$lib/client/crypto';
 	import { vaultKeyStore, saveVaultKeyToSession } from '$lib/client/encryptionStore';
@@ -45,6 +46,7 @@
 	let isMobileMenuOpen = $state(false);
 
 	let audioSrc = $state<string | undefined>(undefined);
+	let audioElement = $state<HTMLAudioElement>();
 
 	$effect(() => {
 		// Close menu on route change
@@ -53,16 +55,32 @@
 	});
 
 	$effect(() => {
+		// Handle track changes
 		if (media.currentTrack) {
 			let cancelled = false;
+			
+			// Hard stop the audio element to prevent overlapping
+			if (audioElement) {
+				audioElement.pause();
+				audioElement.removeAttribute('src');
+				audioElement.load();
+			}
+			
+			audioSrc = undefined; // Immediately stop previous track
+			media.isLoadingTrack = true;
 			media.loadTrack(media.currentTrack).then((src) => {
-				if (!cancelled) audioSrc = src || undefined;
+				if (!cancelled) {
+					audioSrc = src || undefined;
+					media.isLoadingTrack = false;
+				}
 			});
 			return () => {
 				cancelled = true;
+				media.isLoadingTrack = false;
 			};
 		} else {
 			audioSrc = undefined;
+			media.isLoadingTrack = false;
 		}
 	});
 
@@ -388,12 +406,16 @@
 
 							<div class="ml-2 flex items-center gap-2 border-l border-[#2A3241] pl-3">
 								<button
-									onclick={() => media.togglePlay()}
+									onclick={() => {
+										if (!media.isLoadingTrack) media.togglePlay();
+									}}
 									class="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
-									title={media.isPaused ? 'Play' : 'Pause'}
-									aria-label={media.isPaused ? 'Play' : 'Pause'}
+									title={media.isLoadingTrack ? 'Loading...' : media.isPaused ? 'Play' : 'Pause'}
+									aria-label={media.isLoadingTrack ? 'Loading...' : media.isPaused ? 'Play' : 'Pause'}
 								>
-									{#if media.isPaused}
+									{#if media.isLoadingTrack}
+										<Loader2 size={12} class="animate-spin text-black" />
+									{:else if media.isPaused}
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
 											width="12"
@@ -487,6 +509,7 @@
 <!-- Global Audio Element (Muted/Unmounted if on dedicated video route to prevent overlap) -->
 {#if !($page.url.pathname.startsWith('/video/') && $page.url.pathname.length > 7)}
 	<audio
+		bind:this={audioElement}
 		bind:currentTime={media.currentTime}
 		bind:duration={media.duration}
 		bind:paused={media.isPaused}

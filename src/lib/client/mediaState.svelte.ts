@@ -2,6 +2,7 @@ class MediaState {
 	playlist = $state<any[]>([]);
 	currentIndex = $state(-1);
 	isPaused = $state(true);
+	isLoadingTrack = $state(false);
 	currentTime = $state(0);
 	duration = $state(0);
 	volume = $state(1);
