@@ -29,7 +29,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 	let romanizedType: 'romaji' | 'romanized' | null = null;
 	const textToCheck = track.syncedLyrics || track.plainLyrics || '';
-	if (/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(textToCheck)) {
+	if (
+		/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(
+			textToCheck
+		)
+	) {
 		romanizedType = 'romaji';
 	} else if (/[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/.test(textToCheck)) {
 		romanizedType = 'romanized';
@@ -41,16 +45,20 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		// Retroactive romanization for already cached files
 		if (!finalRomajiLyrics && romanizedType && textToCheck) {
 			const { transliterateLrc } = await import('$lib/server/lyrics');
-			finalRomajiLyrics = await transliterateLrc(textToCheck, romanizedType === 'romaji' ? 'japanese' : 'korean');
-			
+			finalRomajiLyrics = await transliterateLrc(
+				textToCheck,
+				romanizedType === 'romaji' ? 'japanese' : 'korean'
+			);
+
 			// Save the retroactively generated lyrics to the database
-			await db.update(files)
-				.set({ romajiLyrics: finalRomajiLyrics })
-				.where(eq(files.id, fileId));
+			await db.update(files).set({ romajiLyrics: finalRomajiLyrics }).where(eq(files.id, fileId));
 		}
 
 		const normalizeForComparison = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-		if (finalRomajiLyrics && normalizeForComparison(finalRomajiLyrics) === normalizeForComparison(textToCheck)) {
+		if (
+			finalRomajiLyrics &&
+			normalizeForComparison(finalRomajiLyrics) === normalizeForComparison(textToCheck)
+		) {
 			finalRomajiLyrics = null;
 			romanizedType = null;
 		}
@@ -61,7 +69,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			romajiLyrics: finalRomajiLyrics,
 			source: track.lyricsSource,
 			romanizedType,
-			status: (!track.syncedLyrics && !track.plainLyrics) ? 'not_found' : 'found'
+			status: !track.syncedLyrics && !track.plainLyrics ? 'not_found' : 'found'
 		});
 	}
 
@@ -72,17 +80,24 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		track.duration,
 		undefined
 	);
-	
+
 	let newRomanizedType: 'romaji' | 'romanized' | null = null;
 	const newTextToCheck = result.syncedLyrics || result.plainLyrics || '';
-	if (/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(newTextToCheck)) {
+	if (
+		/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(
+			newTextToCheck
+		)
+	) {
 		newRomanizedType = 'romaji';
 	} else if (/[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/.test(newTextToCheck)) {
 		newRomanizedType = 'romanized';
 	}
 
 	const normalizeForComparison = (str: string) => str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-	if (result.romajiLyrics && normalizeForComparison(result.romajiLyrics) === normalizeForComparison(newTextToCheck)) {
+	if (
+		result.romajiLyrics &&
+		normalizeForComparison(result.romajiLyrics) === normalizeForComparison(newTextToCheck)
+	) {
 		result.romajiLyrics = null;
 		newRomanizedType = null;
 	}
@@ -112,7 +127,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const { lyricsText, clear } = body;
 
 	if (clear) {
-		await db.update(files)
+		await db
+			.update(files)
 			.set({
 				syncedLyrics: null,
 				plainLyrics: null,
@@ -141,7 +157,11 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	}
 
 	const textToCheck = synced || plain || '';
-	if (/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(textToCheck)) {
+	if (
+		/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]/.test(
+			textToCheck
+		)
+	) {
 		romanizedType = 'romaji';
 	} else if (/[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/.test(textToCheck)) {
 		romanizedType = 'romanized';
@@ -149,10 +169,14 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	if (romanizedType && textToCheck) {
 		const { transliterateLrc } = await import('$lib/server/lyrics');
-		romaji = await transliterateLrc(textToCheck, romanizedType === 'romaji' ? 'japanese' : 'korean');
+		romaji = await transliterateLrc(
+			textToCheck,
+			romanizedType === 'romaji' ? 'japanese' : 'korean'
+		);
 	}
 
-	await db.update(files)
+	await db
+		.update(files)
 		.set({
 			syncedLyrics: synced,
 			plainLyrics: plain,

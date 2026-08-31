@@ -39,7 +39,12 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 			}
 
 			if (targetFolder.category !== folder.category) {
-				return json({ error: `Cannot move a ${folder.category} folder into a ${targetFolder.category} folder` }, { status: 400 });
+				return json(
+					{
+						error: `Cannot move a ${folder.category} folder into a ${targetFolder.category} folder`
+					},
+					{ status: 400 }
+				);
 			}
 
 			// Circular Reference Guard: Ensure targetFolderId is not a descendant of folderId
@@ -54,9 +59,12 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 			`);
 
 			const isDescendant = descendantsResult.length > 0;
-			
+
 			if (isDescendant) {
-				return json({ error: 'Cannot move a folder into its own sub-folder (Circular reference)' }, { status: 400 });
+				return json(
+					{ error: 'Cannot move a folder into its own sub-folder (Circular reference)' },
+					{ status: 400 }
+				);
 			}
 		}
 

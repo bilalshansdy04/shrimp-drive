@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Film, Play, Clock, List, Grid2x2, Check, Download, X } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
+	import { downloadFileClient } from '$lib/client/mediaState.svelte';
 	import type { PageData } from './$types';
 
 	const { data }: { data: PageData } = $props();
@@ -33,6 +34,7 @@
 	function toggleSelection(id: string) {
 		if (selectedIds.includes(id)) {
 			selectedIds = selectedIds.filter((i) => i !== id);
+			if (selectedIds.length === 0) selectionMode = false;
 		} else {
 			selectedIds = [...selectedIds, id];
 		}
@@ -44,12 +46,10 @@
 	}
 
 	function downloadFile(id: string) {
-		const link = document.createElement('a');
-		link.href = `/api/files/${id}/download`;
-		link.download = '';
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+		const video = videoFiles.find((v: any) => v.id === id);
+		if (video) {
+			downloadFileClient(video);
+		}
 	}
 
 	function downloadSelected() {
@@ -102,7 +102,7 @@
 			}
 			const diffX = Math.abs(currentX - startX);
 			const diffY = Math.abs(currentY - startY);
-			
+
 			if (diffX > 10 || diffY > 10) {
 				clearTimeout(timer);
 			}
@@ -142,10 +142,13 @@
 				<div class="flex items-center gap-2">
 					<button
 						onclick={toggleSelectionMode}
-						class="flex items-center gap-2 rounded-lg border {selectionMode ? 'border-[#FF6B4A] bg-[#FF6B4A]/10 text-[#FF6B4A]' : 'border-[#2A3241] bg-[#151921] text-gray-400 hover:bg-[#1E2430] hover:text-white'} px-3 py-2 text-sm font-medium transition-colors"
+						class="flex items-center gap-2 rounded-lg border {selectionMode
+							? 'border-[#FF6B4A] bg-[#FF6B4A]/10 text-[#FF6B4A]'
+							: 'border-[#2A3241] bg-[#151921] text-gray-400 hover:bg-[#1E2430] hover:text-white'} px-3 py-2 text-sm font-medium transition-colors"
 						title={selectionMode ? 'Cancel Selection' : 'Select Items'}
 					>
-						<Check size={16} /> <span class="hidden sm:inline">{selectionMode ? 'Cancel' : 'Select'}</span>
+						<Check size={16} />
+						<span class="hidden sm:inline">{selectionMode ? 'Cancel' : 'Select'}</span>
 					</button>
 					<button
 						onclick={() => (viewMode = viewMode === 'list' ? 'grid' : 'list')}
@@ -265,7 +268,7 @@
 								{formatTime(video.duration)}
 							</div>
 						</div>
-						<div class="p-4 flex items-start justify-between">
+						<div class="flex items-start justify-between p-4">
 							<div class="min-w-0 flex-1">
 								<h3
 									class="group-hover:text-primary-container mb-1 truncate text-base font-semibold text-white transition-colors"

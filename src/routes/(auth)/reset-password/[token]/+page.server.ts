@@ -3,12 +3,15 @@ import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { users, passwordResetTokens } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const token = params.token;
 
-	const tokenResult = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, token));
+	const tokenResult = await db
+		.select()
+		.from(passwordResetTokens)
+		.where(eq(passwordResetTokens.token, token));
 
 	if (tokenResult.length === 0) {
 		return { error: 'Invalid or expired password reset link.' };
@@ -21,29 +24,35 @@ export const load: PageServerLoad = async ({ params }) => {
 		return { error: 'Password reset link has expired. Please request a new one.' };
 	}
 
-	return { token: resetToken.token };
+	const userResult = await db.select({ 
+		email: users.email,
+		googleId: users.googleId,
+		username: users.username
+	}).from(users).where(eq(users.id, resetToken.userId));
+
+	return { 
+		token: resetToken.token,
+		email: userResult.length > 0 ? userResult[0].email : '',
+		username: userResult.length > 0 ? userResult[0].username : '',
+		hasGoogleId: userResult.length > 0 ? userResult[0].googleId !== null : false
+	};
 };
 
 export const actions: Actions = {
 	default: async ({ request, params }) => {
 		const token = params.token;
 		const data = await request.formData();
-		const password = data.get('password') as string;
-		const confirmPassword = data.get('confirmPassword') as string;
+		const authHash = data.get('authHash') as string;
+		const encryptedVaultKey = data.get('encryptedVaultKey') as string;
 
-		if (!password || !confirmPassword) {
-			return fail(400, { error: 'All fields are required.' });
+		if (!authHash || !encryptedVaultKey) {
+			return fail(400, { error: 'Cryptographic data missing.' });
 		}
 
-		if (password !== confirmPassword) {
-			return fail(400, { error: 'Passwords do not match.' });
-		}
-
-		if (password.length < 8) {
-			return fail(400, { error: 'Password must be at least 8 characters.' });
-		}
-
-		const tokenResult = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, token));
+		const tokenResult = await db
+			.select()
+			.from(passwordResetTokens)
+			.where(eq(passwordResetTokens.token, token));
 
 		if (tokenResult.length === 0) {
 			return fail(400, { error: 'Invalid or expired password reset link.' });
@@ -56,14 +65,17 @@ export const actions: Actions = {
 			return fail(400, { error: 'Password reset link has expired.' });
 		}
 
-		const passwordHash = await bcrypt.hash(password, 10);
+		const passwordHash = await hashPassword(authHash);
 
-		// Update user password
-		await db.update(users).set({ passwordHash }).where(eq(users.id, resetToken.userId));
-		
+		// Update user password and vault key
+		await db.update(users).set({ 
+			passwordHash,
+			encryptedVaultKey
+		}).where(eq(users.id, resetToken.userId));
+
 		// Delete used token
 		await db.delete(passwordResetTokens).where(eq(passwordResetTokens.id, resetToken.id));
 
-		return { success: 'Your password has been successfully reset! You can now login.' };
+		return { success: 'Your password and encryption key have been successfully reset! You can now login.' };
 	}
 };

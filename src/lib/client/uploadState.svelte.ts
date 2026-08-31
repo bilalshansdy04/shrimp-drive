@@ -1,7 +1,22 @@
 import { invalidateAll } from '$app/navigation';
 import { toast } from 'svelte-sonner';
+import { get } from 'svelte/store';
+import { encryptFileBlob, encryptMetadata } from '$lib/client/crypto';
+import { vaultKeyStore } from '$lib/client/encryptionStore';
 
-export type UploadStatus = 'conflict' | 'idle' | 'extracting_thumb' | 'uploading' | 'cooldown' | 'queued_for_sending' | 'wait_send' | 'sending' | 'completed' | 'error';
+import * as musicMetadata from 'music-metadata-browser';
+
+export type UploadStatus =
+	| 'conflict'
+	| 'idle'
+	| 'extracting_thumb'
+	| 'uploading'
+	| 'cooldown'
+	| 'queued_for_sending'
+	| 'wait_send'
+	| 'sending'
+	| 'completed'
+	| 'error';
 
 export interface UploadItem {
 	id: string;
@@ -26,10 +41,13 @@ class UploadState {
 	items = $state<UploadItem[]>([]);
 	isOpen = $state(false);
 	globalCooldownUntil = $state(0);
-	
+
 	isUploadingActive = $state(false);
 	isSendingActive = $state(false);
-	
+
+	isEncryptionActive = $state(false);
+	encryptionMode = $state('flexible');
+
 	get isRateLimited() {
 		return this.globalCooldownUntil > Date.now();
 	}
@@ -46,12 +64,20 @@ class UploadState {
 		return this.items.filter((i) => i.status !== 'completed' && i.status !== 'error');
 	}
 
-	async addFiles(files: FileList | File[], folderId?: string | null) {
+	private activeXHR: XMLHttpRequest | null = null;
+
+	public setEncryptionSettings(mode: string, active: boolean | number) {
+		this.encryptionMode = mode;
+		this.isEncryptionActive = !!active;
+	}
+
+	public async addFiles(fileList: FileList, folderId: string | null = null) {
 		if (this.pendingItems.length === 0) {
 			this.items = [];
 		}
 
 		const validFiles: File[] = [];
+		const files = Array.from(fileList);
 		for (let i = 0; i < files.length; i++) {
 			const file = files[i];
 			if (file.size > 20 * 1024 * 1024) {
@@ -64,7 +90,7 @@ class UploadState {
 		if (validFiles.length === 0) return;
 
 		// Check conflicts
-		const fileNames = validFiles.map(f => f.name);
+		const fileNames = validFiles.map((f) => f.name);
 		let conflictsMap = new Map<string, string>(); // fileName -> fileId
 		try {
 			const res = await fetch('/api/files/check-conflicts', {
@@ -78,7 +104,7 @@ class UploadState {
 					conflictsMap.set(conflict.fileName, conflict.fileId);
 				}
 			}
-		} catch(e) {
+		} catch (e) {
 			console.error('Failed to check conflicts', e);
 		}
 
@@ -115,6 +141,22 @@ class UploadState {
 
 	cancelItem(id: string) {
 		this.removeFile(id);
+	}
+
+	retryItem(id: string) {
+		const item = this.items.find((i) => i.id === id);
+		if (item && item.status === 'error') {
+			item.status = 'idle';
+			item.progress = 0;
+			item.errorMsg = undefined;
+			item._sendFinished = false;
+			item._sendSuccess = undefined;
+			item._sendErr = undefined;
+			item._resolveSend = undefined;
+			
+			this.processUploadQueue();
+			this.processSendingQueue();
+		}
 	}
 
 	resolveConflict(id: string, action: 'skip' | 'continue' | 'replace') {
@@ -165,7 +207,13 @@ class UploadState {
 
 			const nextItem = this.items.find((i) => i.status === 'idle');
 			if (!nextItem) {
-				const stillCooldown = this.items.some(i => i.status === 'cooldown' || i.status === 'queued_for_sending' || i.status === 'sending' || i.status === 'wait_send');
+				const stillCooldown = this.items.some(
+					(i) =>
+						i.status === 'cooldown' ||
+						i.status === 'queued_for_sending' ||
+						i.status === 'sending' ||
+						i.status === 'wait_send'
+				);
 				if (stillCooldown || Date.now() < this.globalCooldownUntil) {
 					await wait(500);
 					continue;
@@ -174,8 +222,12 @@ class UploadState {
 			}
 
 			await this.uploadItemToVPS(nextItem);
-			
-			if (nextItem.status === 'queued_for_sending' || nextItem.status === 'sending' || nextItem._sendFinished) {
+
+			if (
+				nextItem.status === 'queued_for_sending' ||
+				nextItem.status === 'sending' ||
+				nextItem._sendFinished
+			) {
 				const prev = nextItem.status;
 				if (prev !== 'completed' && prev !== 'error') {
 					nextItem.status = 'cooldown';
@@ -187,7 +239,7 @@ class UploadState {
 					await wait(500);
 				}
 			} else {
-			    await wait(500);
+				await wait(500);
 			}
 		}
 
@@ -199,13 +251,20 @@ class UploadState {
 		this.isSendingActive = true;
 
 		while (true) {
-			let nextItem = this.items.find((i) => 
-				i.status === 'queued_for_sending' || 
-				(i.status === 'cooldown' && i._sendFinished === false)
+			let nextItem = this.items.find(
+				(i) =>
+					i.status === 'queued_for_sending' ||
+					(i.status === 'cooldown' && i._sendFinished === false)
 			);
-			
+
 			if (!nextItem) {
-				const stillUploading = this.items.some(i => i.status === 'idle' || i.status === 'extracting_thumb' || i.status === 'uploading' || i.status === 'cooldown');
+				const stillUploading = this.items.some(
+					(i) =>
+						i.status === 'idle' ||
+						i.status === 'extracting_thumb' ||
+						i.status === 'uploading' ||
+						i.status === 'cooldown'
+				);
 				if (stillUploading) {
 					await wait(200);
 					continue;
@@ -223,13 +282,13 @@ class UploadState {
 				if (nextItem._sendSuccess) await invalidateAll();
 			} else {
 				nextItem.status = 'sending';
-				
+
 				await new Promise<void>((resolve) => {
 					nextItem!._resolveSend = (success, err) => {
 						nextItem!._sendFinished = true;
 						nextItem!._sendSuccess = success;
 						nextItem!._sendErr = err;
-						
+
 						nextItem!.status = success ? 'completed' : 'error';
 						if (!success) nextItem!.errorMsg = err;
 						resolve();
@@ -247,7 +306,7 @@ class UploadState {
 
 	private async uploadItemToVPS(item: UploadItem) {
 		item.status = 'extracting_thumb';
-		
+
 		const formData = new FormData();
 		formData.append('file', item.file);
 
@@ -261,58 +320,84 @@ class UploadState {
 			formData.append('replaceFileId', item.replaceFileId);
 		}
 
-		if (item.file.type.startsWith('video/')) {
+		const ext = item.file.name.split('.').pop()?.toLowerCase() || '';
+		const isAudio = item.file.type.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'].includes(ext);
+		const isVideo = item.file.type.startsWith('video/') || ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'wmv'].includes(ext);
+		const isImage = item.file.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'svg', 'tiff', 'raw'].includes(ext);
+
+		if (isAudio) {
 			try {
-				const videoInfo = await new Promise<{ dataUrl: string | null; duration: number }>((resolve) => {
-					const video = document.createElement('video');
-					video.preload = 'metadata';
-					video.muted = true;
-					video.src = URL.createObjectURL(item.file);
+				const audioMeta = await musicMetadata.parseBlob(item.file);
+				if (audioMeta.common.title) formData.append('audioTitle', audioMeta.common.title);
+				if (audioMeta.common.artist) formData.append('audioArtist', audioMeta.common.artist);
+				if (audioMeta.common.album) formData.append('audioAlbum', audioMeta.common.album);
+				if (audioMeta.format.duration)
+					formData.append('audioDuration', audioMeta.format.duration.toString());
 
-					video.onloadedmetadata = () => {
-						if (video.duration === Infinity) {
-							video.currentTime = 1e101;
-							video.ontimeupdate = () => {
-								video.ontimeupdate = null;
-								video.currentTime = 0;
-							};
-						}
-					};
+				if (audioMeta.common.picture && audioMeta.common.picture.length > 0) {
+					const pic = audioMeta.common.picture[0];
+					const picBlob = new Blob([pic.data as unknown as BlobPart], { type: pic.format });
+					formData.append('audioThumbnail', picBlob, 'cover.jpg');
+				}
+			} catch (e) {
+				console.error('Audio metadata extraction failed', e);
+			}
+		} else if (isVideo) {
+			try {
+				const videoInfo = await new Promise<{ dataUrl: string | null; duration: number }>(
+					(resolve) => {
+						const video = document.createElement('video');
+						video.preload = 'metadata';
+						video.muted = true;
+						video.src = URL.createObjectURL(item.file);
 
-					video.onloadeddata = () => {
-						const safeDuration = isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
-						video.currentTime = Math.min(1, safeDuration / 2 || 0);
-					};
+						video.onloadedmetadata = () => {
+							if (video.duration === Infinity) {
+								video.currentTime = 1e101;
+								video.ontimeupdate = () => {
+									video.ontimeupdate = null;
+									video.currentTime = 0;
+								};
+							}
+						};
 
-					video.onseeked = () => {
-						const canvas = document.createElement('canvas');
-						const ctx = canvas.getContext('2d');
-						const safeDuration = isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
-						if (!ctx) return resolve({ dataUrl: null, duration: safeDuration });
+						video.onloadeddata = () => {
+							const safeDuration =
+								isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
+							video.currentTime = Math.min(1, safeDuration / 2 || 0);
+						};
 
-						const maxWidth = 320;
-						const scale = Math.min(1, maxWidth / video.videoWidth);
-						canvas.width = video.videoWidth * scale;
-						canvas.height = video.videoHeight * scale;
+						video.onseeked = () => {
+							const canvas = document.createElement('canvas');
+							const ctx = canvas.getContext('2d');
+							const safeDuration =
+								isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
+							if (!ctx) return resolve({ dataUrl: null, duration: safeDuration });
 
-						ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-						const dataUrl = canvas.toDataURL('image/webp', 0.8);
-						URL.revokeObjectURL(video.src);
-						resolve({ dataUrl, duration: safeDuration });
-					};
+							const maxWidth = 320;
+							const scale = Math.min(1, maxWidth / video.videoWidth);
+							canvas.width = video.videoWidth * scale;
+							canvas.height = video.videoHeight * scale;
 
-					video.onerror = () => {
-						URL.revokeObjectURL(video.src);
-						resolve({ dataUrl: null, duration: 0 });
-					};
-				});
+							ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+							const dataUrl = canvas.toDataURL('image/webp', 0.8);
+							URL.revokeObjectURL(video.src);
+							resolve({ dataUrl, duration: safeDuration });
+						};
+
+						video.onerror = () => {
+							URL.revokeObjectURL(video.src);
+							resolve({ dataUrl: null, duration: 0 });
+						};
+					}
+				);
 
 				if (videoInfo.dataUrl) formData.append('videoThumbnail', videoInfo.dataUrl);
 				if (videoInfo.duration > 0) formData.append('videoDuration', videoInfo.duration.toString());
 			} catch (e) {
 				console.error('Thumbnail extraction failed', e);
 			}
-		} else if (item.file.type.startsWith('image/')) {
+		} else if (isImage) {
 			try {
 				const imageThumbnail = await new Promise<string | null>((resolve) => {
 					const img = new window.Image();
@@ -344,6 +429,52 @@ class UploadState {
 			}
 		}
 
+		// Encrypt File Blob if required
+		let fileBlobToUpload: Blob = item.file;
+		const dek = get(vaultKeyStore);
+		const wantsEncryption =
+			this.encryptionMode === 'locked_on' ||
+			(this.encryptionMode === 'flexible' && this.isEncryptionActive);
+		
+		console.log('Upload Debug:', {
+			wantsEncryption,
+			encryptionMode: this.encryptionMode,
+			isEncryptionActive: this.isEncryptionActive,
+			hasDek: !!dek
+		});
+
+		if (wantsEncryption) {
+			if (!dek) {
+				console.error('Cannot encrypt: DEK is missing from memory!');
+				item.status = 'error';
+				item.errorMsg = 'Cannot encrypt: Missing Encryption Key';
+				return;
+			}
+			try {
+				fileBlobToUpload = await encryptFileBlob(item.file, dek);
+				formData.append('isEncryptedClientSide', 'true');
+				
+				// Doomsday Backup: Encrypt metadata for Telegram Caption
+				const metadataToEncrypt = {
+					n: item.file.name,
+					s: item.file.size,
+					t: item.file.type
+				};
+				const encMeta = await encryptMetadata(metadataToEncrypt, dek);
+				formData.append('encryptedMetadata', encMeta);
+				
+				console.log('File and metadata encrypted successfully!');
+			} catch (e) {
+				console.error('File encryption failed', e);
+				item.status = 'error';
+				item.errorMsg = 'Encryption failed';
+				return;
+			}
+		}
+
+		// Overwrite the 'file' field with the (possibly encrypted) blob
+		formData.set('file', fileBlobToUpload, item.file.name);
+
 		item.status = 'uploading';
 
 		return new Promise<void>((resolveUpload) => {
@@ -360,7 +491,7 @@ class UploadState {
 					resolveUpload();
 				}
 			};
-			
+
 			xhr.upload.addEventListener('progress', (event) => {
 				if (event.lengthComputable) {
 					item.progress = Math.round((event.loaded / event.total) * 100);
@@ -422,7 +553,7 @@ class UploadState {
 					item._sendErr = 'Connection error or aborted';
 				}
 			});
-			
+
 			xhr.addEventListener('abort', () => {
 				triggerUploadDone();
 				item.status = 'error';

@@ -21,10 +21,11 @@
 		ArrowUpDown,
 		Check,
 		Download,
-		X
+		X,
+		Loader2
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
-	import { media } from '$lib/client/mediaState.svelte';
+	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
 	import LyricsPanel from '$lib/components/music/LyricsPanel.svelte';
 
 	let { data } = $props<{ data: PageData }>();
@@ -34,13 +35,13 @@
 	let viewMode = $state<'list' | 'grid'>('list');
 	let sortBy = $state<'date' | 'name' | 'artist' | 'album'>('date');
 	let sortOrder = $state<'asc' | 'desc'>('desc');
-	
+
 	let selectionMode = $state(false);
 	let selectedIds = $state<string[]>([]);
 
 	function toggleSelection(id: string) {
 		if (selectedIds.includes(id)) {
-			selectedIds = selectedIds.filter(i => i !== id);
+			selectedIds = selectedIds.filter((i) => i !== id);
 		} else {
 			selectedIds = [...selectedIds, id];
 		}
@@ -52,12 +53,10 @@
 	}
 
 	function downloadFile(id: string) {
-		const link = document.createElement('a');
-		link.href = `/api/files/${id}/download`;
-		link.download = '';
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+		const track = audioFiles.find((t: any) => t.id === id);
+		if (track) {
+			downloadFileClient(track);
+		}
 	}
 
 	function downloadSelected() {
@@ -69,11 +68,14 @@
 		toggleSelectionMode();
 	}
 
-	function longpress(node: HTMLElement, { duration, callback }: { duration: number, callback: () => void }) {
+	function longpress(
+		node: HTMLElement,
+		{ duration, callback }: { duration: number; callback: () => void }
+	) {
 		let timer: ReturnType<typeof setTimeout>;
 		let startX = 0;
 		let startY = 0;
-		
+
 		const handleMousedown = (e: MouseEvent | TouchEvent) => {
 			if (e instanceof TouchEvent) {
 				startX = e.touches[0].clientX;
@@ -99,12 +101,12 @@
 			}
 			const diffX = Math.abs(currentX - startX);
 			const diffY = Math.abs(currentY - startY);
-			
+
 			if (diffX > 10 || diffY > 10) {
 				clearTimeout(timer);
 			}
 		};
-		
+
 		const handleMouseup = () => {
 			clearTimeout(timer);
 		};
@@ -116,7 +118,7 @@
 		node.addEventListener('touchmove', handleMousemove, { passive: true });
 		node.addEventListener('touchend', handleMouseup);
 		node.addEventListener('touchcancel', handleMouseup);
-		
+
 		return {
 			destroy() {
 				node.removeEventListener('mousedown', handleMousedown);
@@ -206,14 +208,17 @@
 			<h1 class="mb-1 text-3xl font-bold text-white">Music Library</h1>
 			<p class="text-sm text-gray-400">{audioFiles.length} tracks • {formatBytes(totalSize)}</p>
 		</div>
-		
+
 		<div class="flex items-center gap-2">
 			<button
 				onclick={toggleSelectionMode}
-				class="flex items-center gap-2 rounded-lg border {selectionMode ? 'border-[#FF6B4A] bg-[#FF6B4A]/10 text-[#FF6B4A]' : 'border-[#2A3241] bg-[#151921] text-gray-400 hover:bg-[#1E2430] hover:text-white'} px-3 py-2 text-sm font-medium transition-colors"
+				class="flex items-center gap-2 rounded-lg border {selectionMode
+					? 'border-[#FF6B4A] bg-[#FF6B4A]/10 text-[#FF6B4A]'
+					: 'border-[#2A3241] bg-[#151921] text-gray-400 hover:bg-[#1E2430] hover:text-white'} px-3 py-2 text-sm font-medium transition-colors"
 				title={selectionMode ? 'Cancel Selection' : 'Select Items'}
 			>
-				<Check size={16} /> <span class="hidden sm:inline">{selectionMode ? 'Cancel' : 'Select'}</span>
+				<Check size={16} />
+				<span class="hidden sm:inline">{selectionMode ? 'Cancel' : 'Select'}</span>
 			</button>
 			<div class="relative">
 				<button
@@ -363,10 +368,14 @@
 					</p>
 				</div>
 				<button
-					onclick={() => media.togglePlay()}
+					onclick={() => {
+						if (!media.isLoadingTrack) media.togglePlay();
+					}}
 					class="flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
 				>
-					{#if media.isPaused}
+					{#if media.isLoadingTrack}
+						<Loader2 size={24} class="animate-spin text-white" />
+					{:else if media.isPaused}
 						<Play size={24} fill="currentColor" class="ml-1" />
 					{:else}
 						<Pause size={24} fill="currentColor" />
@@ -435,11 +444,18 @@
 					<div class="flex flex-1 items-center justify-between">
 						<div class="flex items-center gap-3 text-[#FF6B4A]">
 							<button onclick={toggleSelectionMode}><X size={20} /></button>
-							<span class="font-medium text-sm sm:text-base">{selectedIds.length} Selected</span>
+							<span class="text-sm font-medium sm:text-base">{selectedIds.length} Selected</span>
 						</div>
 						<div class="flex items-center gap-3">
-							<button onclick={() => selectedIds = audioFiles.map(f => f.id)} class="text-sm font-medium text-[#FF6B4A] hover:underline">Select All</button>
-							<button onclick={downloadSelected} class="flex items-center gap-1 rounded bg-[#FF6B4A] px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50" disabled={selectedIds.length === 0}>
+							<button
+								onclick={() => (selectedIds = audioFiles.map((f) => f.id))}
+								class="text-sm font-medium text-[#FF6B4A] hover:underline">Select All</button
+							>
+							<button
+								onclick={downloadSelected}
+								class="flex items-center gap-1 rounded bg-[#FF6B4A] px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50"
+								disabled={selectedIds.length === 0}
+							>
 								<Download size={16} /> <span class="hidden sm:inline">Download</span>
 							</button>
 						</div>
@@ -461,22 +477,35 @@
 				</div>
 			{:else if viewMode === 'list'}
 				<div class="w-full">
-					<table class="w-full border-collapse text-left table-fixed">
+					<table class="w-full table-fixed border-collapse text-left">
 						<thead>
-							<tr class="border-b {selectionMode ? 'border-[#FF6B4A] bg-[#FF6B4A]/10' : 'border-[#2A3241] bg-[#10131a]'}">
-								<th class="w-10 sm:w-12 px-2 sm:px-4 py-3 text-center text-xs font-medium {selectionMode ? 'text-[#FF6B4A]' : 'text-gray-400'}">
+							<tr
+								class="border-b {selectionMode
+									? 'border-[#FF6B4A] bg-[#FF6B4A]/10'
+									: 'border-[#2A3241] bg-[#10131a]'}"
+							>
+								<th
+									class="w-10 px-2 py-3 text-center text-xs font-medium sm:w-12 sm:px-4 {selectionMode
+										? 'text-[#FF6B4A]'
+										: 'text-gray-400'}"
+								>
 									{#if selectionMode}
 										<button onclick={toggleSelectionMode}><X size={20} class="mx-auto" /></button>
 									{:else}
 										#
 									{/if}
 								</th>
-								<th class="px-2 sm:px-4 py-3 text-xs font-medium text-gray-400">
+								<th class="px-2 py-3 text-xs font-medium text-gray-400 sm:px-4">
 									{#if selectionMode}
 										<div class="flex flex-1 items-center justify-start text-[#FF6B4A]">
 											<div class="flex items-center gap-3 sm:gap-4">
-												<span class="font-medium text-sm sm:text-base">{selectedIds.length} Selected</span>
-												<button onclick={() => selectedIds = audioFiles.map(f => f.id)} class="text-sm font-medium hover:underline">Select All</button>
+												<span class="text-sm font-medium sm:text-base"
+													>{selectedIds.length} Selected</span
+												>
+												<button
+													onclick={() => (selectedIds = audioFiles.map((f) => f.id))}
+													class="text-sm font-medium hover:underline">Select All</button
+												>
 											</div>
 										</div>
 									{:else}
@@ -486,18 +515,29 @@
 								<th class="hidden px-4 py-3 text-xs font-medium text-gray-400 sm:table-cell">
 									{#if !selectionMode}Artist{/if}
 								</th>
-								<th class="hidden w-24 px-4 py-3 text-right text-xs font-medium text-gray-400 sm:table-cell">
+								<th
+									class="hidden w-24 px-4 py-3 text-right text-xs font-medium text-gray-400 sm:table-cell"
+								>
 									{#if !selectionMode}Duration{/if}
 								</th>
-								<th class="hidden w-28 px-4 py-3 text-right text-xs font-medium text-gray-400 md:table-cell">
+								<th
+									class="hidden w-28 px-4 py-3 text-right text-xs font-medium text-gray-400 md:table-cell"
+								>
 									{#if !selectionMode}Bitrate{/if}
 								</th>
-								<th class="hidden w-32 px-4 py-3 text-right text-xs font-medium text-gray-400 lg:table-cell">
+								<th
+									class="hidden w-32 px-4 py-3 text-right text-xs font-medium text-gray-400 lg:table-cell"
+								>
 									{#if !selectionMode}Added{/if}
 								</th>
-								<th class="w-12 sm:w-16 px-2 py-3 text-center">
+								<th class="w-12 px-2 py-3 text-center sm:w-16">
 									{#if selectionMode}
-										<button onclick={downloadSelected} class="mx-auto flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded bg-[#FF6B4A] text-black transition-opacity hover:opacity-90 disabled:opacity-50" disabled={selectedIds.length === 0} title="Download Selected">
+										<button
+											onclick={downloadSelected}
+											class="mx-auto flex h-7 w-7 items-center justify-center rounded bg-[#FF6B4A] text-black transition-opacity hover:opacity-90 disabled:opacity-50 sm:h-8 sm:w-8"
+											disabled={selectedIds.length === 0}
+											title="Download Selected"
+										>
 											<Download size={16} />
 										</button>
 									{/if}
@@ -507,7 +547,10 @@
 						<tbody class="divide-y divide-[#2A3241]/50 text-sm text-white">
 							{#each audioFiles as track, index}
 								<tr
-									class="group cursor-pointer transition-colors hover:bg-[#1E2430] {selectionMode && selectedIds.includes(track.id) ? 'bg-[#FF6B4A]/10' : ''}"
+									class="group cursor-pointer transition-colors hover:bg-[#1E2430] {selectionMode &&
+									selectedIds.includes(track.id)
+										? 'bg-[#FF6B4A]/10'
+										: ''}"
 									use:longpress={{
 										duration: 400,
 										callback: () => {
@@ -525,23 +568,37 @@
 										}
 									}}
 								>
-									<td class="px-2 sm:px-4 py-3 text-center text-xs text-gray-400">
+									<td class="px-2 py-3 text-center text-xs text-gray-400 sm:px-4">
 										{#if selectionMode}
-											<div class="h-4 w-4 rounded border {selectedIds.includes(track.id) ? 'bg-[#FF6B4A] border-[#FF6B4A]' : 'border-[#2A3241]'} mx-auto flex items-center justify-center">
+											<div
+												class="h-4 w-4 rounded border {selectedIds.includes(track.id)
+													? 'border-[#FF6B4A] bg-[#FF6B4A]'
+													: 'border-[#2A3241]'} mx-auto flex items-center justify-center"
+											>
 												{#if selectedIds.includes(track.id)}
 													<Check size={12} class="text-black" />
 												{/if}
 											</div>
-										{:else if media.currentTrack?.id === track.id && !media.isPaused}
-											<div class="text-primary-container mx-auto h-3 w-3">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													viewBox="0 0 24 24"
-													fill="currentColor"
-												>
-													<polygon points="5 3 19 12 5 21 5 3"></polygon>
-												</svg>
-											</div>
+										{:else if media.currentTrack?.id === track.id}
+											{#if media.isLoadingTrack}
+												<div class="mx-auto flex h-full items-center justify-center text-primary">
+													<Loader2 size={14} class="animate-spin" />
+												</div>
+											{:else if !media.isPaused}
+												<div class="text-primary-container mx-auto h-3 w-3">
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														viewBox="0 0 24 24"
+														fill="currentColor"
+													>
+														<polygon points="5 3 19 12 5 21 5 3"></polygon>
+													</svg>
+												</div>
+											{:else}
+												<div class="text-gray-400 mx-auto h-3 w-3">
+													<span class="text-xs font-bold font-mono">{(index + 1).toString().padStart(2, '0')}</span>
+												</div>
+											{/if}
 										{:else}
 											<span class="text-xs text-gray-500 group-hover:hidden">{index + 1}</span>
 											<Play
@@ -550,7 +607,7 @@
 											/>
 										{/if}
 									</td>
-									<td class="px-2 sm:px-4 py-3">
+									<td class="px-2 py-3 sm:px-4">
 										<div class="flex items-center gap-3">
 											<div
 												class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-[#2A3241] bg-[#10131a]"
@@ -572,7 +629,8 @@
 									<td class="hidden max-w-[120px] truncate px-4 py-3 text-gray-400 sm:table-cell"
 										>{track.artist || 'Unknown Artist'}</td
 									>
-									<td class="hidden px-4 py-3 text-right text-xs text-gray-400 tabular-nums sm:table-cell"
+									<td
+										class="hidden px-4 py-3 text-right text-xs text-gray-400 tabular-nums sm:table-cell"
 										>{formatTime(track.duration || 0)}</td
 									>
 									<td
@@ -588,9 +646,8 @@
 												e.stopPropagation();
 												downloadFile(track.id);
 											}}
-											class="text-gray-400 opacity-100 sm:opacity-0 transition-opacity group-hover:opacity-100 hover:text-[#FF6B4A]"
-											title="Download"
-											><Download size={18} /></button
+											class="text-gray-400 opacity-100 transition-opacity group-hover:opacity-100 hover:text-[#FF6B4A] sm:opacity-0"
+											title="Download"><Download size={18} /></button
 										>
 									</td>
 								</tr>
@@ -602,7 +659,10 @@
 				<div class="grid grid-cols-2 gap-4 p-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 					{#each audioFiles as track, index}
 						<div
-							class="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#2A3241] bg-[#10131a] transition-colors hover:border-[#FF6B4A] {selectionMode && selectedIds.includes(track.id) ? 'border-[#FF6B4A] ring-2 ring-[#FF6B4A]' : ''}"
+							class="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#2A3241] bg-[#10131a] transition-colors hover:border-[#FF6B4A] {selectionMode &&
+							selectedIds.includes(track.id)
+								? 'border-[#FF6B4A] ring-2 ring-[#FF6B4A]'
+								: ''}"
 							use:longpress={{
 								duration: 400,
 								callback: () => {
@@ -621,7 +681,13 @@
 							}}
 						>
 							{#if selectionMode}
-								<div class="absolute top-2 right-2 z-20 h-5 w-5 rounded-full border flex items-center justify-center {selectedIds.includes(track.id) ? 'bg-[#FF6B4A] border-[#FF6B4A]' : 'bg-black/50 border-white'}">
+								<div
+									class="absolute top-2 right-2 z-20 flex h-5 w-5 items-center justify-center rounded-full border {selectedIds.includes(
+										track.id
+									)
+										? 'border-[#FF6B4A] bg-[#FF6B4A]'
+										: 'border-white bg-black/50'}"
+								>
 									{#if selectedIds.includes(track.id)}
 										<Check size={14} class="text-black" />
 									{/if}
@@ -640,7 +706,9 @@
 									<div
 										class="flex h-12 w-12 items-center justify-center rounded-full bg-[#FF6B4A] text-black shadow-lg"
 									>
-										{#if media.currentTrack?.id === track.id && !media.isPaused}
+										{#if media.currentTrack?.id === track.id && media.isLoadingTrack}
+											<Loader2 size={24} class="animate-spin text-black" />
+										{:else if media.currentTrack?.id === track.id && !media.isPaused}
 											<Pause size={24} fill="currentColor" />
 										{:else}
 											<Play size={24} fill="currentColor" class="ml-1" />
@@ -723,9 +791,13 @@
 				</button>
 				<button
 					class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
-					onclick={() => media.togglePlay()}
+					onclick={() => {
+						if (!media.isLoadingTrack) media.togglePlay();
+					}}
 				>
-					{#if media.isPaused}
+					{#if media.isLoadingTrack}
+						<Loader2 size={18} class="animate-spin text-black" />
+					{:else if media.isPaused}
 						<Play size={18} fill="currentColor" class="ml-0.5" />
 					{:else}
 						<Pause size={18} fill="currentColor" />
@@ -746,9 +818,13 @@
 				>
 				<button
 					class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
-					onclick={() => media.togglePlay()}
+					onclick={() => {
+						if (!media.isLoadingTrack) media.togglePlay();
+					}}
 				>
-					{#if media.isPaused}
+					{#if media.isLoadingTrack}
+						<Loader2 size={18} class="animate-spin text-black" />
+					{:else if media.isPaused}
 						<Play size={18} fill="currentColor" class="ml-0.5" />
 					{:else}
 						<Pause size={18} fill="currentColor" />

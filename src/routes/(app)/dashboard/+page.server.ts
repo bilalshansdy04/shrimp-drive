@@ -1,8 +1,9 @@
-import type { PageServerLoad } from './$types';
+﻿import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { files, users } from '$lib/server/db/schema';
 import { eq, desc, and, isNull } from 'drizzle-orm';
 import { redirect, fail } from '@sveltejs/kit';
+import { hardDeleteFile } from '$lib/server/fileUtils';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) {
@@ -20,10 +21,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.limit(10);
 
 	// 2. Fetch category stats
-	const allFiles = await db.select({
-		fileType: files.fileType,
-		fileSize: files.fileSize
-	}).from(files).where(and(eq(files.userId, userId), isNull(files.deletedAt)));
+	const allFiles = await db
+		.select({
+			fileType: files.fileType,
+			fileSize: files.fileSize
+		})
+		.from(files)
+		.where(and(eq(files.userId, userId), isNull(files.deletedAt)));
 
 	const stats = {
 		audio: { size: 0, count: 0 },
@@ -59,22 +63,12 @@ export const actions = {
 			return fail(400, { error: 'File ID missing' });
 		}
 
-		const fileResult = await db
-			.select()
-			.from(files)
-			.where(and(eq(files.id, fileId), eq(files.userId, locals.user.id)));
-
-		if (fileResult.length === 0) {
-			return fail(404, { error: 'File not found' });
+		try {
+			await hardDeleteFile(fileId, locals.user.id, locals.user.storageUsed);
+			return { success: true };
+		} catch (e: any) {
+			console.error('DELETE ERROR:', e);
+			return fail(404, { error: e.message || 'File not found' });
 		}
-
-		const fileToDelete = fileResult[0];
-
-		await db.update(files).set({ deletedAt: new Date() }).where(eq(files.id, fileId));
-
-		const newStorageUsed = Math.max(0, locals.user.storageUsed - fileToDelete.fileSize);
-		await db.update(users).set({ storageUsed: newStorageUsed }).where(eq(users.id, locals.user.id));
-
-		return { success: true };
 	}
 };

@@ -19,7 +19,7 @@ export function parseLrc(lrcString: string): LyricLine[] {
 			const minutes = parseInt(match[1], 10);
 			const seconds = parseFloat(match[2]);
 			const timeInSeconds = minutes * 60 + seconds;
-			
+
 			parsed.push({
 				time: timeInSeconds,
 				text

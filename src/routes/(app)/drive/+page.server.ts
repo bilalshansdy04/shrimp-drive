@@ -1,8 +1,9 @@
-import type { PageServerLoad } from './$types';
+﻿import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { files, users } from '$lib/server/db/schema';
 import { eq, desc, and, isNull } from 'drizzle-orm';
 import { redirect, fail } from '@sveltejs/kit';
+import { hardDeleteFile } from '$lib/server/fileUtils';
 
 import { sql } from 'drizzle-orm';
 import { folders } from '$lib/server/db/schema';
@@ -42,7 +43,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	// 1.5.1 Auto-create default root folders if missing
 	if (!folderId) {
-		const existingCategories = new Set(childFolders.map(f => f.category));
+		const existingCategories = new Set(childFolders.map((f) => f.category));
 		const defaultFolders = [
 			{ name: 'Music', category: 'audio' },
 			{ name: 'Video', category: 'video' },
@@ -68,13 +69,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			childFolders = await db
 				.select()
 				.from(folders)
-				.where(
-					and(
-						eq(folders.userId, userId),
-						isNull(folders.parentId),
-						isNull(folders.deletedAt)
-					)
-				)
+				.where(and(eq(folders.userId, userId), isNull(folders.parentId), isNull(folders.deletedAt)))
 				.orderBy(desc(folders.createdAt));
 		}
 
@@ -83,9 +78,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			.select()
 			.from(files)
 			.where(and(eq(files.userId, userId), isNull(files.folderId), isNull(files.deletedAt)));
-		
+
 		if (rootFiles.length > 0) {
-			const categoryToFolderId = new Map(childFolders.map(f => [f.category, f.id]));
+			const categoryToFolderId = new Map(childFolders.map((f) => [f.category, f.id]));
 			for (const file of rootFiles) {
 				const targetFolderId = categoryToFolderId.get(file.fileType);
 				if (targetFolderId) {
@@ -108,9 +103,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		)
 		.orderBy(desc(files.createdAt));
 
-
 	// 1.6 Fetch Breadcrumbs using Recursive CTE
-	let breadcrumbs: { id: string, name: string }[] = [];
+	let breadcrumbs: { id: string; name: string }[] = [];
 	if (folderId) {
 		const rows = await db.all(sql`
 			WITH RECURSIVE parent_folders(id, name, parent_id, level) AS (
@@ -121,14 +115,17 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			)
 			SELECT id, name FROM parent_folders ORDER BY level DESC
 		`);
-		breadcrumbs = rows as { id: string, name: string }[];
+		breadcrumbs = rows as { id: string; name: string }[];
 	}
 
 	// 2. Fetch category stats
-	const allFiles = await db.select({
-		fileType: files.fileType,
-		fileSize: files.fileSize
-	}).from(files).where(and(eq(files.userId, userId), isNull(files.deletedAt)));
+	const allFiles = await db
+		.select({
+			fileType: files.fileType,
+			fileSize: files.fileSize
+		})
+		.from(files)
+		.where(and(eq(files.userId, userId), isNull(files.deletedAt)));
 
 	const stats = {
 		audio: { size: 0, count: 0 },
@@ -167,22 +164,12 @@ export const actions = {
 			return fail(400, { error: 'File ID missing' });
 		}
 
-		const fileResult = await db
-			.select()
-			.from(files)
-			.where(and(eq(files.id, fileId), eq(files.userId, locals.user.id)));
-
-		if (fileResult.length === 0) {
-			return fail(404, { error: 'File not found' });
+		try {
+			await hardDeleteFile(fileId, locals.user.id, locals.user.storageUsed);
+			return { success: true };
+		} catch (e: any) {
+			console.error('DELETE ERROR:', e);
+			return fail(404, { error: e.message || 'File not found' });
 		}
-
-		const fileToDelete = fileResult[0];
-
-		await db.update(files).set({ deletedAt: new Date() }).where(eq(files.id, fileId));
-
-		const newStorageUsed = Math.max(0, locals.user.storageUsed - fileToDelete.fileSize);
-		await db.update(users).set({ storageUsed: newStorageUsed }).where(eq(users.id, locals.user.id));
-
-		return { success: true };
 	}
 };

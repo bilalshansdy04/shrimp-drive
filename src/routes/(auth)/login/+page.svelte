@@ -1,9 +1,15 @@
 <script lang="ts">
 	import { AtSign, Key, LogIn } from 'lucide-svelte';
 	import { enhance } from '$app/forms';
+	import { deriveKeysFromPassword, unwrapMasterKey } from '$lib/client/crypto';
+	import { saveVaultKeyToSession } from '$lib/client/encryptionStore';
+	import { goto } from '$app/navigation';
 
-	let { form } = $props<{ form: any }>();
+	let { form, data } = $props<{ form: any, data: any }>();
 	let isLoading = $state(false);
+
+	let username = $state('');
+	let rawPassword = $state('');
 </script>
 
 <div
@@ -29,12 +35,17 @@
 				/>
 				<h1 class="text-3xl font-bold text-white">Shrimp Drive</h1>
 			</div>
-			<p class="text-sm text-gray-400">Sign in to your private storage.</p>
+			<p class="text-sm text-gray-400">Welcome back to your private space.</p>
 		</header>
 
 		<div
 			class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.5)]"
 		>
+			{#if data.errorMessage}
+				<div class="mb-4 rounded-lg bg-[#93000a] px-4 py-2 text-sm font-medium text-[#ffdad6]">
+					{data.errorMessage}
+				</div>
+			{/if}
 			{#if form?.error}
 				<div class="mb-4 rounded-lg bg-[#93000a] px-4 py-2 text-sm font-medium text-[#ffdad6]">
 					{form.error}
@@ -43,10 +54,39 @@
 
 			<form
 				method="POST"
-				use:enhance={() => {
+				use:enhance={async (e) => {
 					isLoading = true;
-					return async ({ update }) => {
-						await update();
+					try {
+						const { authHash: derivedAuthHash } = await deriveKeysFromPassword(
+							rawPassword,
+							username
+						);
+						e.formData.set('authHash', derivedAuthHash);
+					} catch (err) {
+						console.error('Crypto error', err);
+						e.cancel();
+						isLoading = false;
+						return;
+					}
+
+					return async ({ result, update }) => {
+						if (result.type === 'success' && result.data?.success) {
+							// Unwrap DEK with KEK
+							try {
+								if (result.data && result.data.encryptedVaultKey) {
+									const actualUsername = result.data.actualUsername as string;
+									const { kek } = await deriveKeysFromPassword(rawPassword, actualUsername);
+									const dek = await unwrapMasterKey(result.data.encryptedVaultKey as string, kek);
+									saveVaultKeyToSession(dek);
+								}
+								goto((result.data?.redirectTo as string) || '/dashboard');
+							} catch (err) {
+								console.error('Failed to unwrap vault key', err);
+								form = { error: 'Login gagal karena kunci error. Harap ulangi kembali' };
+							}
+						} else {
+							await update({ reset: false });
+						}
 						isLoading = false;
 					};
 				}}
@@ -62,6 +102,7 @@
 								size={20}
 							/>
 							<input
+								bind:value={username}
 								name="username"
 								id="username"
 								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
@@ -81,18 +122,21 @@
 								size={20}
 							/>
 							<input
+								bind:value={rawPassword}
 								name="password"
 								id="password"
 								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
-								placeholder="••••••••"
+								placeholder="••••••••••"
 								type="password"
 								required
 							/>
 						</div>
 					</div>
-					
+
 					<div class="flex justify-end">
-						<a href="/forgot-password" class="text-xs font-medium text-[#FF6B4A] hover:underline">Forgot password?</a>
+						<a href="/forgot-password" class="text-xs font-medium text-[#FF6B4A] hover:underline"
+							>Forgot password?</a
+						>
 					</div>
 				</div>
 

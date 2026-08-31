@@ -60,13 +60,13 @@ export const GET: RequestHandler = async ({ request, url, locals }) => {
 	}
 
 	const category = url.searchParams.get('category');
-	
+
 	try {
 		let conditions = [eq(folders.userId, locals.user.id)];
 		if (category) {
 			conditions.push(eq(folders.category, category));
 		}
-		
+
 		const allFolders = await db.query.folders.findMany({
 			where: and(...conditions)
 		});

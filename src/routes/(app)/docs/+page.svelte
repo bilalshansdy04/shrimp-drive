@@ -1,17 +1,19 @@
 <script lang="ts">
-	import { 
-		FileText, 
-		FileSpreadsheet, 
-		Presentation, 
-		Archive, 
-		File, 
-		Download, 
-		ExternalLink, 
+	import {
+		FileText,
+		FileSpreadsheet,
+		Presentation,
+		Archive,
+		File,
+		Download,
+		ExternalLink,
 		Search,
-		FileCode
+		FileCode,
+		Eye
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import { formatBytes } from '$lib/utils';
+	import { downloadFileClient } from '$lib/client/mediaState.svelte';
 
 	const { data }: { data: PageData } = $props();
 	const docFiles = $derived(data.docFiles);
@@ -28,7 +30,7 @@
 
 	function getIconAndColor(filename: string) {
 		const ext = getFileExtension(filename);
-		
+
 		switch (ext) {
 			case 'pdf':
 				return { component: FileText, color: 'text-rose-500', bg: 'bg-rose-500/10' };
@@ -79,18 +81,20 @@
 			<p class="mt-2 text-gray-400">Manage all your files, archives, and documents</p>
 		</div>
 		<div class="relative w-full sm:w-72">
-			<Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+			<Search class="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" size={18} />
 			<input
 				type="text"
 				placeholder="Search documents..."
 				bind:value={searchQuery}
-				class="w-full rounded-full border border-[#2A3241] bg-[#151921] py-2 pl-10 pr-4 text-sm text-white placeholder-gray-500 outline-none transition-colors focus:border-primary-container"
+				class="focus:border-primary-container w-full rounded-full border border-[#2A3241] bg-[#151921] py-2 pr-4 pl-10 text-sm text-white placeholder-gray-500 transition-colors outline-none"
 			/>
 		</div>
 	</div>
 
 	{#if docFiles.length === 0}
-		<div class="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-[#2A3241] p-12 text-center">
+		<div
+			class="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-[#2A3241] p-12 text-center"
+		>
 			<div class="mb-4 rounded-full bg-[#151921] p-4 text-gray-400">
 				<FileText size={48} />
 			</div>
@@ -100,7 +104,7 @@
 			</p>
 		</div>
 	{:else if filteredDocs.length === 0}
-		<div class="flex py-12 flex-col items-center justify-center text-center">
+		<div class="flex flex-col items-center justify-center py-12 text-center">
 			<div class="mb-4 rounded-full bg-[#151921] p-4 text-gray-500">
 				<Search size={32} />
 			</div>
@@ -110,21 +114,26 @@
 		<!-- List View -->
 		<div class="flex flex-col gap-2">
 			<!-- Table Header -->
-			<div class="hidden grid-cols-12 gap-4 rounded-lg bg-[#151921]/50 px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500 sm:grid">
+			<div
+				class="hidden grid-cols-12 gap-4 rounded-lg bg-[#151921]/50 px-4 py-3 text-xs font-medium tracking-wider text-gray-500 uppercase sm:grid"
+			>
 				<div class="col-span-6 md:col-span-7">Name</div>
 				<div class="col-span-2 hidden md:block">Date</div>
 				<div class="col-span-3 md:col-span-2">Size</div>
-				<div class="col-span-3 md:col-span-1 text-right">Action</div>
+				<div class="col-span-3 text-right md:col-span-1">Action</div>
 			</div>
 
 			<!-- List Items -->
 			{#each filteredDocs as doc (doc.id)}
 				{@const IconInfo = getIconAndColor(doc.fileName)}
-				<div class="group flex flex-col gap-2 rounded-xl border border-[#2A3241] bg-[#151921] p-4 transition-all hover:border-primary-container hover:bg-[#1A202A] sm:grid sm:grid-cols-12 sm:items-center sm:gap-4 sm:px-4 sm:py-3">
-					
+				<div
+					class="group hover:border-primary-container flex flex-col gap-2 rounded-xl border border-[#2A3241] bg-[#151921] p-4 transition-all hover:bg-[#1A202A] sm:grid sm:grid-cols-12 sm:items-center sm:gap-4 sm:px-4 sm:py-3"
+				>
 					<!-- Name & Icon -->
-					<div class="col-span-6 flex items-center gap-4 md:col-span-7 overflow-hidden">
-						<div class={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${IconInfo.bg}`}>
+					<div class="col-span-6 flex items-center gap-4 overflow-hidden md:col-span-7">
+						<div
+							class={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${IconInfo.bg}`}
+						>
 							<IconInfo.component size={20} class={IconInfo.color} />
 						</div>
 						<div class="min-w-0 flex-1">
@@ -145,27 +154,26 @@
 					</div>
 
 					<!-- Actions -->
-					<div class="col-span-3 flex items-center justify-start sm:justify-end gap-1 md:col-span-1">
-						<!-- Preview in New Tab (Inline) -->
+					<div
+						class="col-span-3 flex items-center justify-start gap-1 sm:justify-end md:col-span-1"
+					>
+						<!-- Custom Preview (Internal Route) -->
 						<a
-							href={`/api/files/${doc.id}/download`}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+							href={`/docs/${doc.id}`}
+							class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
 							title="Preview"
 						>
-							<ExternalLink size={18} />
+							<Eye size={18} />
 						</a>
-						
+
 						<!-- Force Download (Attachment) -->
-						<a
-							href={`/api/files/${doc.id}/download?download=1`}
-							download={doc.fileName}
-							class="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+						<button
+							onclick={() => downloadFileClient(doc, false)}
+							class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
 							title="Download"
 						>
 							<Download size={18} />
-						</a>
+						</button>
 					</div>
 				</div>
 			{/each}

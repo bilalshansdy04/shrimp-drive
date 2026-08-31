@@ -1,8 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
-import { users, invitationCodes } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, invitationCodes, storageBonuses, telegramNodes } from '$lib/server/db/schema';
+import { eq, like } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import { recalculateUserStorageLimit } from '$lib/server/storage';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
@@ -11,73 +13,135 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const data = await request.json();
-		const { code, botToken, chatId } = data;
+		const { backendChoice, code, botToken, chatId, enableEncryption, authHash, encryptedVaultKey } = data;
 
-		let finalBotToken = botToken;
-		let finalChatId = chatId;
+		let finalNodeId: string | null = null;
 		let finalEncryptionMode = 'flexible';
-		let finalStorageLimit = 8589934592; // 8GB default
-		let inviteType = 'regular_self_setup';
+		let inviteCodeRecord: any = null;
 
+		let bonusStorageToGrant = 0;
+
+		// 1. Process Invitation Code (Optional)
 		if (code) {
-			// Verify Invitation Code
-			const codeResult = await db.select().from(invitationCodes).where(eq(invitationCodes.code, code));
+			const codeResult = await db
+				.select()
+				.from(invitationCodes)
+				.where(eq(invitationCodes.code, code));
 			if (codeResult.length === 0) {
 				return json({ error: 'Invalid Invitation Code.' }, { status: 400 });
 			}
 
-			const inviteCode = codeResult[0];
-			if (inviteCode.isUsed) {
+			inviteCodeRecord = codeResult[0];
+			if (inviteCodeRecord.isUsed && inviteCodeRecord.usedCount >= inviteCodeRecord.maxUses) {
 				return json({ error: 'Invitation Code has already been used.' }, { status: 400 });
 			}
 
-			finalEncryptionMode = inviteCode.encryptionMode;
-			finalStorageLimit = inviteCode.storageLimit;
-			inviteType = inviteCode.type;
-
-			if (inviteCode.type === 'friend_zero_setup') {
-				if (!inviteCode.assignedBotToken || !inviteCode.assignedChatId) {
-					return json({ error: 'Invitation Code is invalid. Missing admin bot token.' }, { status: 400 });
-				}
-				finalBotToken = inviteCode.assignedBotToken;
-				finalChatId = inviteCode.assignedChatId;
-			}
+			finalEncryptionMode = inviteCodeRecord.encryptionMode;
+			bonusStorageToGrant = inviteCodeRecord.bonusAmount;
 		}
 
-		if (!code || inviteType !== 'friend_zero_setup') {
-			if (!finalBotToken || !finalChatId) {
-				return json({ error: 'Bot Token and Chat ID are required.' }, { status: 400 });
+		// 2. Assign Storage Node
+		if (backendChoice === 'global') {
+			// Find the Global Node
+			// We look for a node named 'drive-global' or similar
+			const globalNodes = await db
+				.select()
+				.from(telegramNodes)
+				.where(like(telegramNodes.name, '%global%'));
+
+			if (globalNodes.length === 0) {
+				return json(
+					{ error: 'Global Drive node is not configured by the administrator.' },
+					{ status: 500 }
+				);
 			}
+			finalNodeId = globalNodes[0].id;
+		} else {
+			// Custom Node Setup
+			if (!botToken || !chatId) {
+				return json(
+					{ error: 'Bot Token and Chat ID are required for Custom Node.' },
+					{ status: 400 }
+				);
+			}
+
 			// Verify custom Bot Token
-			const getMeRes = await fetch(`https://api.telegram.org/bot${finalBotToken}/getMe`);
+			const getMeRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
 			const getMeData = await getMeRes.json();
 			if (!getMeData.ok) {
 				return json({ error: 'Invalid Telegram Bot Token.' }, { status: 400 });
 			}
 
 			// Verify custom Chat ID
-			const getChatRes = await fetch(`https://api.telegram.org/bot${finalBotToken}/getChat?chat_id=${finalChatId}`);
+			const getChatRes = await fetch(
+				`https://api.telegram.org/bot${botToken}/getChat?chat_id=${chatId}`
+			);
 			const getChatData = await getChatRes.json();
 			if (!getChatData.ok) {
-				return json({ error: `Invalid Chat ID or Bot not added to channel. Telegram says: ${getChatData.description}` }, { status: 400 });
+				return json(
+					{
+						error: `Invalid Chat ID or Bot not added to channel. Telegram says: ${getChatData.description}`
+					},
+					{ status: 400 }
+				);
 			}
+
+			// Create a personal telegram node for the user
+			finalNodeId = crypto.randomUUID();
+			await db.insert(telegramNodes).values({
+				id: finalNodeId,
+				name: `Personal Node - ${locals.user.username}`,
+				botToken,
+				chatId,
+				isActive: true
+			});
 		}
 
-		// Update User
-		await db.update(users).set({
-			telegramBotToken: finalBotToken,
-			telegramChatId: finalChatId,
+		// 3. Update User
+		const updateData: any = {
+			telegramNodeId: finalNodeId,
 			encryptionMode: finalEncryptionMode,
-			storageLimit: finalStorageLimit
-		}).where(eq(users.id, locals.user.id));
+			isEncryptionActive: enableEncryption === true
+		};
 
-		if (code) {
-			// Mark code as used
-			await db.update(invitationCodes).set({
-				isUsed: 1,
-				usedBy: locals.user.id
-			}).where(eq(invitationCodes.code, code));
+		if (authHash && encryptedVaultKey) {
+			const { hashPassword } = await import('$lib/server/hash');
+			updateData.passwordHash = await hashPassword(authHash);
+			updateData.encryptedVaultKey = encryptedVaultKey;
 		}
+
+		await db
+			.update(users)
+			.set(updateData)
+			.where(eq(users.id, locals.user.id));
+
+		// 4. Handle Invite Code Rewards
+		if (code && inviteCodeRecord) {
+			// Grant Storage Bonus
+			if (bonusStorageToGrant > 0 || bonusStorageToGrant === -1) {
+				await db.insert(storageBonuses).values({
+					id: crypto.randomUUID(),
+					userId: locals.user.id,
+					invitationCodeId: inviteCodeRecord.id,
+					amount: bonusStorageToGrant
+				});
+			}
+
+			// Mark code as used
+			const newUsedCount = inviteCodeRecord.usedCount + 1;
+			const isFullyUsed = newUsedCount >= inviteCodeRecord.maxUses ? 1 : 0;
+
+			await db
+				.update(invitationCodes)
+				.set({
+					isUsed: isFullyUsed,
+					usedBy: locals.user.id,
+					usedCount: newUsedCount
+				})
+				.where(eq(invitationCodes.code, code));
+		}
+
+		await recalculateUserStorageLimit(locals.user.id);
 
 		return json({ success: true });
 	} catch (error) {

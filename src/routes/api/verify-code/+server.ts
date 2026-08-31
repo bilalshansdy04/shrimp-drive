@@ -13,14 +13,17 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Code is required.' }, { status: 400 });
 		}
 
-		const codeResult = await db.select().from(invitationCodes).where(eq(invitationCodes.code, code));
-		
+		const codeResult = await db
+			.select()
+			.from(invitationCodes)
+			.where(eq(invitationCodes.code, code));
+
 		if (codeResult.length === 0) {
 			return json({ error: 'Invalid Invitation Code.' }, { status: 400 });
 		}
 
 		const inviteCode = codeResult[0];
-		
+
 		if (inviteCode.isUsed) {
 			return json({ error: 'Invitation Code has already been used.' }, { status: 400 });
 		}

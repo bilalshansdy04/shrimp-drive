@@ -2,8 +2,9 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { users, emailVerificationTokens } from '$lib/server/db/schema';
+import * as schema from '$lib/server/db/schema';
 import { eq, or } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 import crypto from 'node:crypto';
 import { sendVerificationEmail } from '$lib/server/email';
 
@@ -17,14 +18,14 @@ export const actions: Actions = {
 		const username = data.get('username') as string;
 		const email = data.get('email') as string;
 		const displayName = data.get('displayName') as string;
-		const password = data.get('password') as string;
+		const authHash = data.get('authHash') as string;
+		const encryptedVaultKey = data.get('encryptedVaultKey') as string;
+		
+		const botToken = data.get('botToken') as string | null;
+		const chatId = data.get('chatId') as string | null;
 
-		if (!username || !email || !displayName || !password) {
+		if (!username || !email || !displayName || !authHash || !encryptedVaultKey) {
 			return fail(400, { error: 'All fields are required.' });
-		}
-
-		if (password.length < 8) {
-			return fail(400, { error: 'Password must be at least 8 characters.' });
 		}
 
 		// Check if username or email already exists
@@ -37,16 +38,18 @@ export const actions: Actions = {
 			return fail(400, { error: 'Username or Email already in use.' });
 		}
 
-		const passwordHash = await bcrypt.hash(password, 10);
+		// Hash the client's authHash one more time using bcrypt
+		const passwordHash = await hashPassword(authHash);
 		const userId = crypto.randomUUID();
 
 		try {
-			await db.insert(users).values({
+			await db.insert(schema.users).values({
 				id: userId,
 				username,
 				email,
 				displayName,
 				passwordHash,
+				encryptedVaultKey,
 				emailVerified: 0
 			});
 
@@ -69,7 +72,13 @@ export const actions: Actions = {
 			throw redirect(303, `/verify-email?email=${encodeURIComponent(email)}`);
 		} catch (error) {
 			// Ignore redirect errors as they are expected behavior in SvelteKit
-			if (error && typeof error === 'object' && 'status' in error && (error as any).status >= 300 && (error as any).status < 400) {
+			if (
+				error &&
+				typeof error === 'object' &&
+				'status' in error &&
+				(error as any).status >= 300 &&
+				(error as any).status < 400
+			) {
 				throw error;
 			}
 			console.error('Error during registration:', error);

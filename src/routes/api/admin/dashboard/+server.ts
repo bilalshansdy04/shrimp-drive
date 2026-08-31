@@ -56,4 +56,4 @@ export const GET: RequestHandler = async ({ request }) => {
 			files: recentFiles
 		}
 	});
-}
+};

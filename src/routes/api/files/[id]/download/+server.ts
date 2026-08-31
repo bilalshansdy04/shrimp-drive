@@ -4,6 +4,8 @@ import { db } from '$lib/server/db';
 import { files } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getFileDownloadUrl } from '$lib/server/telegram';
+import { createDecryptionStream } from '$lib/server/crypto';
+import { Readable } from 'node:stream';
 
 export const GET: RequestHandler = async ({ request, params, locals }) => {
 	if (!locals.user) {
@@ -24,28 +26,54 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 	const file = result[0];
 
 	try {
-		const downloadUrl = await getFileDownloadUrl(locals.user.telegramBotToken, file.telegramFileId);
-		
+		// Fetch Telegram Node
+		const { telegramNodes, encryptionKeys } = await import('$lib/server/db/schema');
+		const nodeResult = await db
+			.select()
+			.from(telegramNodes)
+			.where(eq(telegramNodes.id, locals.user.telegramNodeId!));
+		if (nodeResult.length === 0) {
+			throw new Error('Telegram node not found');
+		}
+		const node = nodeResult[0];
+
+		// Fetch Encryption Key if needed
+		let encryptionKeyStr: string | null = null;
+		if (locals.user.encryptionKeyId) {
+			const keyResult = await db
+				.select()
+				.from(encryptionKeys)
+				.where(eq(encryptionKeys.id, locals.user.encryptionKeyId));
+			if (keyResult.length > 0) {
+				encryptionKeyStr = keyResult[0].keyValue;
+			}
+		}
+
+		const downloadUrl = await getFileDownloadUrl(node.botToken, file.telegramFileId);
+
 		const requestHeaders = new Headers();
 		const range = request.headers.get('Range');
 		if (range) {
 			requestHeaders.set('Range', range);
 		}
-		
+
 		const response = await fetch(downloadUrl, { headers: requestHeaders });
-		
+
 		if (!response.ok || !response.body) {
 			throw new Error('Failed to fetch file from Telegram');
 		}
 
 		const responseHeaders = new Headers();
 		responseHeaders.set('Content-Type', file.mimeType);
-		
+
 		const urlObj = new URL(request.url);
 		const isDownload = urlObj.searchParams.has('download');
 		const encodedFilename = encodeURIComponent(file.fileName);
-		responseHeaders.set('Content-Disposition', `${isDownload ? 'attachment' : 'inline'}; filename*=UTF-8''${encodedFilename}`);
-		
+		responseHeaders.set(
+			'Content-Disposition',
+			`${isDownload ? 'attachment' : 'inline'}; filename*=UTF-8''${encodedFilename}`
+		);
+
 		responseHeaders.set('Accept-Ranges', 'bytes');
 		if (response.headers.has('Content-Length')) {
 			responseHeaders.set('Content-Length', response.headers.get('Content-Length')!);
@@ -57,7 +85,13 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 			responseHeaders.set('Content-Range', response.headers.get('Content-Range')!);
 		}
 
-		return new Response(response.body, {
+		let finalBody: any = response.body;
+
+		// Server no longer handles decryption for true zero-knowledge.
+		// If the file is encrypted, it returns the ciphertext directly to the client.
+		finalBody = response.body;
+
+		return new Response(finalBody, {
 			status: response.status,
 			headers: responseHeaders
 		});

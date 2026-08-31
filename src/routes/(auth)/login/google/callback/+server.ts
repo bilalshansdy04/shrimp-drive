@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 export const GET: RequestHandler = async ({ url, cookies }) => {
 	const code = url.searchParams.get('code');
 	const state = url.searchParams.get('state');
-	
+
 	const storedState = cookies.get('google_oauth_state');
 	const storedCodeVerifier = cookies.get('google_oauth_code_verifier');
 
@@ -34,25 +34,46 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 			picture: string;
 		} = await response.json();
 
-		const existingUserResult = await db.select().from(users).where(eq(users.googleId, googleUser.sub));
+		const existingUserResult = await db
+			.select()
+			.from(users)
+			.where(eq(users.googleId, googleUser.sub));
 		let userId = '';
 
 		if (existingUserResult.length > 0) {
 			const existingUser = existingUserResult[0];
+			if (!existingUser.isActive) {
+				return new Response(null, {
+					status: 302,
+					headers: { Location: '/login?error=Your+account+has+been+deactivated.' }
+				});
+			}
 			userId = existingUser.id;
 		} else {
 			// Check if email is already registered via standard registration
-			const existingEmailResult = await db.select().from(users).where(eq(users.email, googleUser.email));
+			const existingEmailResult = await db
+				.select()
+				.from(users)
+				.where(eq(users.email, googleUser.email));
 			if (existingEmailResult.length > 0) {
 				const existingEmailUser = existingEmailResult[0];
+				if (!existingEmailUser.isActive) {
+					return new Response(null, {
+						status: 302,
+						headers: { Location: '/login?error=Your+account+has+been+deactivated.' }
+					});
+				}
 				userId = existingEmailUser.id;
 				// Link google account
-				await db.update(users).set({ googleId: googleUser.sub, emailVerified: 1 }).where(eq(users.id, userId));
+				await db
+					.update(users)
+					.set({ googleId: googleUser.sub, emailVerified: 1 })
+					.where(eq(users.id, userId));
 			} else {
 				// Create new user
 				userId = crypto.randomUUID();
 				let username = googleUser.email.split('@')[0];
-				
+
 				// Ensure username is unique
 				let isUnique = false;
 				let counter = 0;
@@ -73,7 +94,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 					email: googleUser.email,
 					username: username,
 					displayName: googleUser.name,
-					emailVerified: 1, // Google emails are pre-verified
+					emailVerified: 1 // Google emails are pre-verified
 				});
 			}
 		}

@@ -12,8 +12,13 @@
 		Settings,
 		LogOut,
 		Menu,
-		X
+		X,
+		Lock,
+		Loader2
 	} from 'lucide-svelte';
+	import { deriveKeysFromPassword, unwrapMasterKey } from '$lib/client/crypto';
+	import { vaultKeyStore, saveVaultKeyToSession } from '$lib/client/encryptionStore';
+	import { get } from 'svelte/store';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { toast, Toaster } from 'svelte-sonner';
@@ -25,11 +30,13 @@
 	import '../../app.css';
 
 	let isMusicRoute = $derived($page.url.pathname === '/music');
-	let isTheatreRoute = $derived($page.url.pathname.startsWith('/video/') && $page.url.pathname.length > 7);
+	let isTheatreRoute = $derived(
+		$page.url.pathname.startsWith('/video/') && $page.url.pathname.length > 7
+	);
 	let hideMiniPlayer = $derived(
 		media.currentTrack
 			? (media.currentTrack.fileType === 'audio' && isMusicRoute) ||
-				(media.currentTrack.fileType === 'video' && isTheatreRoute)
+					(media.currentTrack.fileType === 'video' && isTheatreRoute)
 			: true
 	);
 
@@ -38,15 +45,104 @@
 	let fileInput: HTMLInputElement;
 	let isMobileMenuOpen = $state(false);
 
+	let audioSrc = $state<string | undefined>(undefined);
+	let audioElement = $state<HTMLAudioElement>();
+
 	$effect(() => {
 		// Close menu on route change
 		$page.url.pathname;
 		isMobileMenuOpen = false;
 	});
 
+	$effect(() => {
+		// Handle track changes
+		if (media.currentTrack) {
+			let cancelled = false;
+			
+			// Hard stop the audio element to prevent overlapping
+			if (audioElement) {
+				audioElement.pause();
+				audioElement.removeAttribute('src');
+				audioElement.load();
+			}
+			
+			audioSrc = undefined; // Immediately stop previous track
+			media.isLoadingTrack = true;
+			media.loadTrack(media.currentTrack).then((src) => {
+				if (!cancelled) {
+					audioSrc = src || undefined;
+					media.isLoadingTrack = false;
+				}
+			});
+			return () => {
+				cancelled = true;
+				media.isLoadingTrack = false;
+			};
+		} else {
+			audioSrc = undefined;
+			media.isLoadingTrack = false;
+		}
+	});
+
+	$effect(() => {
+		if (data.user) {
+			uploadState.setEncryptionSettings(data.user.encryptionMode, data.user.isEncryptionActive);
+		}
+	});
+
 	let storagePercentage = $derived(
-		data.user ? Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
+		data.user ? data.user.storageLimit === -1 ? 0 : Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
 	);
+
+	let isVaultLocked = $state(false);
+	let unlockPin = $state('');
+	let isUnlocking = $state(false);
+	let unlockError = $state('');
+	let failedAttempts = $state(0);
+
+	$effect(() => {
+		if (data.user?.encryptedVaultKey) {
+			const dek = get(vaultKeyStore);
+			if (!dek) {
+				isVaultLocked = true;
+			} else {
+				isVaultLocked = false;
+			}
+		}
+	});
+
+	async function unlockVault(e: Event) {
+		e.preventDefault();
+		if (!unlockPin) return;
+
+		isUnlocking = true;
+		unlockError = '';
+
+		try {
+			const keys = await deriveKeysFromPassword(unlockPin, data.user.username);
+			const masterKey = await unwrapMasterKey(data.user.encryptedVaultKey, keys.kek);
+			saveVaultKeyToSession(masterKey);
+			isVaultLocked = false;
+			unlockPin = '';
+			failedAttempts = 0;
+		} catch (err) {
+			console.error(err);
+			failedAttempts++;
+			const errorMessages = [
+				'Incorrect Vault PIN or Password.',
+				'Invalid credentials. Please try again.',
+				'Decryption failed. Wrong PIN/Password.',
+				'Access denied. Verify your password.',
+				'Uh oh! That PIN or Password was incorrect.'
+			];
+			unlockError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
+			
+			if (failedAttempts >= 3) {
+				toast.error('Gagal 3 kali? Jika Anda baru saja mengubah password/PIN, coba refresh halaman ini dan masukkan password baru Anda.', { duration: 6000 });
+			}
+		}
+		isUnlocking = false;
+	}
 
 	function handleUpload(e: Event) {
 		const target = e.target as HTMLInputElement;
@@ -59,6 +155,62 @@
 </script>
 
 <Toaster theme="dark" position="top-right" offset="80px" />
+
+<!-- Vault Locked Modal -->
+{#if isVaultLocked}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0E14]/90 p-4 backdrop-blur-md">
+		<div class="w-full max-w-sm rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-2xl">
+			<div class="mb-4 flex flex-col items-center text-center">
+				<div class="mb-3 rounded-full bg-[#FF6B4A]/10 p-3 text-[#FF6B4A]">
+					<Lock size={32} />
+				</div>
+				<h2 class="text-xl font-bold text-white">Your Vault is Locked</h2>
+				<p class="mt-2 text-sm text-gray-400">
+					Please enter your {data.user?.googleId ? 'Vault PIN' : 'Account Password'} to unlock your files for this session.
+				</p>
+			</div>
+			
+			<form onsubmit={unlockVault} class="mt-6">
+				<div class="mb-4 group relative flex items-center">
+					<Lock class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]" size={20} />
+					<input
+						bind:value={unlockPin}
+						type="password"
+						placeholder={data.user?.googleId ? 'Enter Vault PIN' : 'Enter Password'}
+						required
+						class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-3 pr-4 pl-10 text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
+					/>
+				</div>
+				
+				{#if unlockError}
+					<p class="mb-4 text-center text-sm font-medium text-red-400">{unlockError}</p>
+				{/if}
+
+				<button
+					type="submit"
+					disabled={isUnlocking}
+					class="w-full rounded-lg bg-[#FF6B4A] px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-[#ff8264] disabled:opacity-50"
+				>
+					{isUnlocking ? 'Unlocking...' : 'Unlock Vault'}
+				</button>
+
+				<div class="mt-4 text-center">
+					<a
+						href="/forgot-password"
+						class="text-xs text-gray-400 hover:text-white hover:underline"
+						onclick={() => {
+							isVaultLocked = false;
+						}}
+					>
+						Forgot your PIN/Password?
+					</a>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
 
 <div class="relative flex h-screen w-full overflow-hidden bg-[#0B0E14] text-white">
 	<!-- Mobile Menu Overlay -->
@@ -73,7 +225,9 @@
 
 	<!-- Sidebar -->
 	<aside
-		class="fixed inset-y-0 left-0 z-50 flex h-full w-[260px] shrink-0 flex-col border-r border-[#2A3241] bg-[#151921] transition-transform duration-300 ease-in-out md:relative md:translate-x-0 {isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}"
+		class="fixed inset-y-0 left-0 z-50 flex h-full w-[260px] shrink-0 flex-col border-r border-[#2A3241] bg-[#151921] transition-transform duration-300 ease-in-out md:relative md:translate-x-0 {isMobileMenuOpen
+			? 'translate-x-0'
+			: '-translate-x-full'}"
 	>
 		<!-- Brand -->
 		<div class="flex h-[64px] items-center justify-between border-b border-[#2A3241] px-6">
@@ -124,7 +278,9 @@
 						Music
 					</a>
 					<a
-						href={media.currentTrack?.fileType === 'video' ? `/video/${media.currentTrack.id}` : "/video"}
+						href={media.currentTrack?.fileType === 'video'
+							? `/video/${media.currentTrack.id}`
+							: '/video'}
 						class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-[#2A3241] hover:text-white"
 					>
 						<Video size={18} />
@@ -153,25 +309,40 @@
 			<div class="mb-4">
 				<div class="mb-2 flex justify-between text-xs text-gray-400">
 					<span>Storage (Telegram)</span>
-					<span>{formatBytes(data.user?.storageUsed || 0)} / {formatBytes(data.user?.storageLimit || 0)}</span>
+					<span
+						>{formatBytes(data.user?.storageUsed || 0)} / {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}</span
+					>
 				</div>
 				<div class="h-1.5 w-full overflow-hidden rounded-full bg-[#0B0E14]">
-					<div class="h-full rounded-full bg-[#FF6B4A] transition-all duration-1000 ease-out" style="width: {storagePercentage}%;"></div>
+					<div
+						class="h-full rounded-full bg-[#FF6B4A] transition-all duration-1000 ease-out"
+						style="width: {storagePercentage}%;"
+					></div>
 				</div>
 			</div>
 
 			<div class="flex items-center gap-3">
-				<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-tr from-[#FF6B4A] to-purple-500 text-lg font-bold text-white uppercase">
+				<div
+					class="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-tr from-[#FF6B4A] to-purple-500 text-lg font-bold text-white uppercase"
+				>
 					{data.user?.displayName?.[0] || 'U'}
 				</div>
 				<div class="flex-1 overflow-hidden">
 					<p class="truncate text-sm font-medium">{data.user?.displayName || 'User Account'}</p>
 				</div>
-				<a href="/profile" class="p-1 text-gray-400 transition-colors hover:text-white" title="Settings">
+				<a
+					href="/profile"
+					class="p-1 text-gray-400 transition-colors hover:text-white"
+					title="Settings"
+				>
 					<Settings size={16} />
 				</a>
 				<form action="/logout" method="POST" use:enhance class="flex">
-					<button class="p-1 text-gray-400 transition-colors hover:text-white" type="submit" title="Log Out">
+					<button
+						class="p-1 text-gray-400 transition-colors hover:text-white"
+						type="submit"
+						title="Log Out"
+					>
 						<LogOut size={16} />
 					</button>
 				</form>
@@ -193,7 +364,7 @@
 				>
 					<Menu size={20} />
 				</button>
-				
+
 				<div class="relative w-full max-w-[180px] sm:max-w-[240px] md:max-w-sm lg:w-96">
 					<Search size={18} class="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
 					<input
@@ -206,15 +377,19 @@
 				<div class="hidden items-center gap-2 lg:flex">
 					{#if media.currentTrack && !hideMiniPlayer}
 						<!-- Mini Player -->
-						<div class="flex items-center gap-3 rounded-full border border-[#2A3241] bg-[#151921] px-4 py-1.5 shadow-sm">
+						<div
+							class="flex items-center gap-3 rounded-full border border-[#2A3241] bg-[#151921] px-4 py-1.5 shadow-sm"
+						>
 							{#if media.currentTrack.thumbnailUrl}
-								<img 
-									src={media.currentTrack.thumbnailUrl} 
-									alt="Cover" 
+								<img
+									src={media.currentTrack.thumbnailUrl}
+									alt="Cover"
 									class="h-6 w-6 rounded object-cover"
 								/>
 							{:else}
-								<div class="flex h-6 w-6 items-center justify-center rounded bg-[#2A3241] text-gray-500">
+								<div
+									class="flex h-6 w-6 items-center justify-center rounded bg-[#2A3241] text-gray-500"
+								>
 									{#if media.currentTrack.fileType === 'video'}
 										<Video size={12} />
 									{:else}
@@ -222,27 +397,80 @@
 									{/if}
 								</div>
 							{/if}
-							
+
 							<div class="flex max-w-[120px] flex-col overflow-hidden">
-								<span class="truncate text-xs font-medium text-white">{media.currentTrack.title || media.currentTrack.fileName}</span>
+								<span class="truncate text-xs font-medium text-white"
+									>{media.currentTrack.title || media.currentTrack.fileName}</span
+								>
 							</div>
 
 							<div class="ml-2 flex items-center gap-2 border-l border-[#2A3241] pl-3">
-								<button 
-									onclick={() => media.togglePlay()}
+								<button
+									onclick={() => {
+										if (!media.isLoadingTrack) media.togglePlay();
+									}}
 									class="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
+									title={media.isLoadingTrack ? 'Loading...' : media.isPaused ? 'Play' : 'Pause'}
+									aria-label={media.isLoadingTrack ? 'Loading...' : media.isPaused ? 'Play' : 'Pause'}
 								>
-									{#if media.isPaused}
-										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+									{#if media.isLoadingTrack}
+										<Loader2 size={12} class="animate-spin text-black" />
+									{:else if media.isPaused}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="12"
+											height="12"
+											viewBox="0 0 24 24"
+											fill="currentColor"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg
+										>
 									{:else}
-										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="12"
+											height="12"
+											viewBox="0 0 24 24"
+											fill="currentColor"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											><rect x="6" y="4" width="4" height="16"></rect><rect
+												x="14"
+												y="4"
+												width="4"
+												height="16"
+											></rect></svg
+										>
 									{/if}
 								</button>
-								<button 
+								<button
 									onclick={() => media.playNext()}
 									class="text-gray-400 transition-colors hover:text-white"
+									title="Next Track"
+									aria-label="Next Track"
 								>
-									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										><polygon points="5 4 15 12 5 20 5 4"></polygon><line
+											x1="19"
+											y1="5"
+											x2="19"
+											y2="19"
+										></line></svg
+									>
 								</button>
 							</div>
 						</div>
@@ -251,7 +479,14 @@
 			</div>
 
 			<div class="ml-auto flex items-center gap-2 pl-2 md:gap-4 md:pl-4">
-				<input type="file" multiple id="global-file-upload" class="hidden" bind:this={fileInput} onchange={handleUpload} />
+				<input
+					type="file"
+					multiple
+					id="global-file-upload"
+					class="hidden"
+					bind:this={fileInput}
+					onchange={handleUpload}
+				/>
 				<button
 					onclick={() => fileInput.click()}
 					class="flex items-center gap-2 rounded-lg bg-[#FF6B4A] p-2 text-sm font-medium text-white transition-colors hover:bg-[#FF8266] md:px-4"
@@ -273,13 +508,20 @@
 
 <!-- Global Audio Element (Muted/Unmounted if on dedicated video route to prevent overlap) -->
 {#if !($page.url.pathname.startsWith('/video/') && $page.url.pathname.length > 7)}
-<audio
-	bind:currentTime={media.currentTime}
-	bind:duration={media.duration}
-	bind:paused={media.isPaused}
-	bind:volume={media.volume}
-	src={media.currentTrack ? `/api/files/${media.currentTrack.id}/download` : undefined}
-	onended={() => media.playNext()}
-	autoplay
-></audio>
+	<audio
+		bind:this={audioElement}
+		bind:currentTime={media.currentTime}
+		bind:duration={media.duration}
+		bind:paused={media.isPaused}
+		bind:volume={media.volume}
+		src={audioSrc}
+		onended={() => media.playNext()}
+		onerror={(e) => {
+			if (media.currentTrack?.isEncrypted) {
+				console.error('Audio load error', e);
+				toast.error('File audio rusak atau kunci dekripsi tidak cocok');
+			}
+		}}
+		autoplay
+	></audio>
 {/if}

@@ -21,10 +21,10 @@ export function generateSessionToken(): string {
 }
 
 export async function createSession(token: string, userId: string) {
-	const sessionId = token; // Use token directly for simple implementation. 
+	const sessionId = token; // Use token directly for simple implementation.
 	// (For extra security, you could hash the token before storing, but for this app it's fine).
 	const expiresAt = new Date(Date.now() + SESSION_EXPIRY);
-	
+
 	await db.insert(sessions).values({
 		id: sessionId,
 		userId,
