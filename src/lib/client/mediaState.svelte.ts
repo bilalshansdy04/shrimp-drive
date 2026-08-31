@@ -119,3 +119,28 @@ export async function downloadFileClient(file: any, preview: boolean = false) {
 		alert('Failed to decrypt file.');
 	}
 }
+
+export async function getFileBlobUrl(file: any): Promise<string | null> {
+	const url = `/api/files/${file.id}/download`;
+	if (!file.isEncrypted) {
+		return url;
+	}
+
+	const { get } = await import('svelte/store');
+	const { vaultKeyStore } = await import('$lib/client/encryptionStore');
+	const { decryptFileBlob } = await import('$lib/client/crypto');
+
+	const dek = get(vaultKeyStore);
+	if (!dek) return null;
+
+	try {
+		const res = await fetch(url);
+		if (!res.ok) throw new Error('Failed to fetch file');
+		const encryptedBlob = await res.blob();
+		const decryptedBlob = await decryptFileBlob(encryptedBlob, dek, file.mimeType);
+		return URL.createObjectURL(decryptedBlob);
+	} catch (e) {
+		console.error('Failed to decrypt blob URL', e);
+		return null;
+	}
+}

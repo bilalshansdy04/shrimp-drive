@@ -8,7 +8,8 @@
 		Download,
 		ExternalLink,
 		Search,
-		FileCode
+		FileCode,
+		Eye
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import { formatBytes } from '$lib/utils';
@@ -156,14 +157,14 @@
 					<div
 						class="col-span-3 flex items-center justify-start gap-1 sm:justify-end md:col-span-1"
 					>
-						<!-- Preview in New Tab (Inline) -->
-						<button
-							onclick={() => downloadFileClient(doc, true)}
+						<!-- Custom Preview (Internal Route) -->
+						<a
+							href={`/docs/${doc.id}`}
 							class="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
 							title="Preview"
 						>
-							<ExternalLink size={18} />
-						</button>
+							<Eye size={18} />
+						</a>
 
 						<!-- Force Download (Attachment) -->
 						<button

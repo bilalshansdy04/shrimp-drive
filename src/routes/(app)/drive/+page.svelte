@@ -490,6 +490,12 @@
 								class="absolute inset-0 z-10"
 								aria-label={`View ${file.fileName}`}
 							></a>
+						{:else if file.fileType === 'document'}
+							<a
+								href={`/docs/${file.id}`}
+								class="absolute inset-0 z-10"
+								aria-label={`View ${file.fileName}`}
+							></a>
 						{:else}
 							<button
 								onclick={() => downloadFileClient(file)}
