@@ -9,13 +9,19 @@ export async function PATCH({ request, params }: { request: Request; params: { i
 	try {
 		const { id } = params;
 		const body = await request.json();
-		const { name, botToken, chatId, isActive } = body;
+		const { name, botToken, chatId, isActive, isGlobal } = body;
 
 		const updateData: any = {};
 		if (name !== undefined) updateData.name = name;
 		if (botToken !== undefined) updateData.botToken = botToken;
 		if (chatId !== undefined) updateData.chatId = chatId;
 		if (isActive !== undefined) updateData.isActive = isActive;
+		if (isGlobal !== undefined) updateData.isGlobal = isGlobal;
+
+		if (updateData.isGlobal) {
+			// Unset others if this is being set as global
+			await db.update(telegramNodes).set({ isGlobal: false });
+		}
 
 		await db.update(telegramNodes).set(updateData).where(eq(telegramNodes.id, id));
 

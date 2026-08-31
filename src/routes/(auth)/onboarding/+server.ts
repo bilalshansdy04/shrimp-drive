@@ -42,12 +42,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// 2. Assign Storage Node
 		if (backendChoice === 'global') {
-			// Find the Global Node
-			// We look for a node named 'drive-global' or similar
+			// Find the Global Node using isGlobal flag instead of relying on name
 			const globalNodes = await db
 				.select()
 				.from(telegramNodes)
-				.where(like(telegramNodes.name, '%global%'));
+				.where(eq(telegramNodes.isGlobal, true));
 
 			if (globalNodes.length === 0) {
 				return json(

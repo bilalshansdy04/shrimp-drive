@@ -168,6 +168,7 @@ export const telegramNodes = sqliteTable('telegram_nodes', {
 	botToken: text('bot_token').notNull(),
 	chatId: text('chat_id').notNull(),
 	isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),
+	isGlobal: integer('is_global', { mode: 'boolean' }).default(false).notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date())
 });
 

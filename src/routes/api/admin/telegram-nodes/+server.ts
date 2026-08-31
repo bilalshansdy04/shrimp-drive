@@ -24,7 +24,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	requireAdminAuth(request);
 	try {
 		const body = await request.json();
-		const { name, botToken, chatId } = body;
+		const { name, botToken, chatId, isGlobal } = body;
 
 		if (!name || !botToken || !chatId) {
 			return json(
@@ -33,12 +33,19 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 
+		// If this node is set as global, optionally unset other globals here, but we'll allow multiple for now or just trust the admin.
+		// If they want strict 1 global, we can update others to false. Let's make it exclusive.
+		if (isGlobal) {
+			await db.update(telegramNodes).set({ isGlobal: false });
+		}
+
 		const newNode = {
 			id: crypto.randomUUID(),
 			name,
 			botToken,
 			chatId,
 			isActive: true,
+			isGlobal: !!isGlobal,
 			createdAt: new Date()
 		};
 
