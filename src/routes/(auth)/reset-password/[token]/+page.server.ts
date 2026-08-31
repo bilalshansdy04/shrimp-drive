@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { users, passwordResetTokens } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const token = params.token;
@@ -65,7 +65,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Password reset link has expired.' });
 		}
 
-		const passwordHash = await bcrypt.hash(authHash, 10);
+		const passwordHash = await hashPassword(authHash);
 
 		// Update user password and vault key
 		await db.update(users).set({ 

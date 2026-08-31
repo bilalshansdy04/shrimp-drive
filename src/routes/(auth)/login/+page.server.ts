@@ -3,7 +3,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import { eq, count, or } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 import { createSession, generateSessionToken } from '$lib/server/auth';
 
 export const load: PageServerLoad = async ({ url }) => {
@@ -47,7 +47,7 @@ export const actions: Actions = {
 			return fail(403, { error: 'Your account has been suspended or deactivated.' });
 		}
 
-		const isPasswordValid = await bcrypt.compare(authHash, user.passwordHash);
+		const isPasswordValid = await comparePassword(authHash, user.passwordHash);
 
 		if (!isPasswordValid) {
 			return fail(401, { error: 'Invalid credentials.' });

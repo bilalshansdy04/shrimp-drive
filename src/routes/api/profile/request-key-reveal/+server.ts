@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { users, emailVerificationTokens } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 import crypto from 'node:crypto';
 import { sendVerificationEmail } from '$lib/server/email';
 
@@ -33,7 +33,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Verify authHash against stored passwordHash
-		const isPasswordValid = await bcrypt.compare(authHash, user.passwordHash);
+		const isPasswordValid = await comparePassword(authHash, user.passwordHash);
 		if (!isPasswordValid) {
 			return json({ error: 'Incorrect password.' }, { status: 401 });
 		}

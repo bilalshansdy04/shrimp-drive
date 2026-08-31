@@ -51,7 +51,7 @@ export const GET: RequestHandler = async ({ request, params }) => {
 	});
 };
 
-import bcryptjs from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 
 export const PATCH: RequestHandler = async ({ request, params }) => {
 	requireAdminAuth(request);
@@ -68,7 +68,7 @@ export const PATCH: RequestHandler = async ({ request, params }) => {
 	}
 
 	if (body.password) {
-		updates.passwordHash = await bcryptjs.hash(body.password, 10);
+		updates.passwordHash = await hashPassword(body.password);
 	}
 	if (body.displayName !== undefined) updates.displayName = body.displayName;
 	if (body.username !== undefined) updates.username = body.username;

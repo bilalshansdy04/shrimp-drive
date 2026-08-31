@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) {
@@ -26,13 +26,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (!currentAuthHash) {
 				return json({ success: false, error: 'Current password is required.' }, { status: 400 });
 			}
-			const isPasswordValid = await bcrypt.compare(currentAuthHash, user.passwordHash);
+			const isPasswordValid = await comparePassword(currentAuthHash, user.passwordHash);
 			if (!isPasswordValid) {
 				return json({ success: false, error: 'Incorrect current password.' }, { status: 400 });
 			}
 		}
 
-		const passwordHash = await bcrypt.hash(newAuthHash, 10);
+		const passwordHash = await hashPassword(newAuthHash);
 		
 		await db
 			.update(users)

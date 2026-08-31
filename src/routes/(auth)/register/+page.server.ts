@@ -4,7 +4,7 @@ import { db } from '$lib/server/db';
 import { users, emailVerificationTokens } from '$lib/server/db/schema';
 import * as schema from '$lib/server/db/schema';
 import { eq, or } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 import crypto from 'node:crypto';
 import { sendVerificationEmail } from '$lib/server/email';
 
@@ -39,7 +39,7 @@ export const actions: Actions = {
 		}
 
 		// Hash the client's authHash one more time using bcrypt
-		const passwordHash = await bcrypt.hash(authHash, 10);
+		const passwordHash = await hashPassword(authHash);
 		const userId = crypto.randomUUID();
 
 		try {

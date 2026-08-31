@@ -3,13 +3,6 @@ import { toast } from 'svelte-sonner';
 import { get } from 'svelte/store';
 import { encryptFileBlob, encryptMetadata } from '$lib/client/crypto';
 import { vaultKeyStore } from '$lib/client/encryptionStore';
-import { Buffer } from 'buffer';
-import process from 'process';
-
-if (typeof window !== 'undefined') {
-	(window as any).Buffer = (window as any).Buffer || Buffer;
-	(window as any).process = (window as any).process || process;
-}
 
 import * as musicMetadata from 'music-metadata-browser';
 

@@ -1,7 +1,6 @@
 import { generateMnemonic, mnemonicToEntropy, entropyToMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
-import { pbkdf2Async } from '@noble/hashes/pbkdf2.js';
-import { sha256 } from '@noble/hashes/sha2.js';
+
 
 // 1. Generate a new 256-bit Master Vault Key (DEK)
 export function generateMasterVaultKey(): Uint8Array {
@@ -27,13 +26,32 @@ export async function deriveKeysFromPassword(password: string, username: string)
 	const encoder = new TextEncoder();
 	const passBytes = encoder.encode(password);
 
+	// Import password as PBKDF2 key material
+	const keyMaterial = await window.crypto.subtle.importKey(
+		'raw',
+		passBytes,
+		{ name: 'PBKDF2' },
+		false,
+		['deriveBits']
+	);
+
 	// Derive KEK (Key-Wrapping Key)
 	const kekSalt = encoder.encode(`shrimp_drive_kek_${username}`);
-	const kekBytes = await pbkdf2Async(sha256, passBytes, kekSalt, { c: 100000, dkLen: 32 });
+	const kekBytesBuffer = await window.crypto.subtle.deriveBits(
+		{ name: 'PBKDF2', salt: kekSalt, iterations: 100000, hash: 'SHA-256' },
+		keyMaterial,
+		256
+	);
+	const kekBytes = new Uint8Array(kekBytesBuffer);
 
 	// Derive Auth Hash (To send to server instead of raw password)
 	const authSalt = encoder.encode(`shrimp_drive_auth_salt`);
-	const authHashBytes = await pbkdf2Async(sha256, passBytes, authSalt, { c: 100000, dkLen: 32 });
+	const authHashBytesBuffer = await window.crypto.subtle.deriveBits(
+		{ name: 'PBKDF2', salt: authSalt, iterations: 100000, hash: 'SHA-256' },
+		keyMaterial,
+		256
+	);
+	const authHashBytes = new Uint8Array(authHashBytesBuffer);
 
 	// Convert authHash to hex
 	const authHash = Array.from(authHashBytes)

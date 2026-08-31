@@ -3,7 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { users, encryptionKeys } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
+import { hashPassword, comparePassword } from '$lib/server/hash';
 import crypto from 'node:crypto';
 import { generateRandomKey } from '$lib/server/crypto';
 

@@ -105,8 +105,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		};
 
 		if (authHash && encryptedVaultKey) {
-			const bcrypt = await import('bcryptjs');
-			updateData.passwordHash = await bcrypt.hash(authHash, 10);
+			const { hashPassword } = await import('$lib/server/hash');
+			updateData.passwordHash = await hashPassword(authHash);
 			updateData.encryptedVaultKey = encryptedVaultKey;
 		}
 
