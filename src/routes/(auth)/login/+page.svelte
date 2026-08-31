@@ -10,23 +10,6 @@
 
 	let username = $state('');
 	let rawPassword = $state('');
-
-	let authHash = $state('');
-
-	async function handleFormSubmit() {
-		isLoading = true;
-
-		try {
-			// Instead of generating DEK, we just derive KEK to compute authHash
-			// (We need authHash for authentication, NOT for generating a new vault)
-			const { authHash: derivedAuthHash } = await deriveKeysFromPassword(rawPassword, username);
-			authHash = derivedAuthHash;
-		} catch (err: any) {
-			console.error('Crypto error:', err);
-			alert('Failed to process login. Please try again.');
-			isLoading = false;
-		}
-	}
 </script>
 
 <div
@@ -108,8 +91,6 @@
 					};
 				}}
 			>
-				<input type="hidden" name="authHash" value="" />
-
 				<div class="mb-8 space-y-4">
 					<div class="group relative">
 						<label class="mb-1 block text-xs font-medium text-gray-400" for="username"
