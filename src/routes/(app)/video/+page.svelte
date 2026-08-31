@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Film, Play, Clock, List, Grid2x2, Check, Download, X } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
+	import { downloadFileClient } from '$lib/client/mediaState.svelte';
 	import type { PageData } from './$types';
 
 	const { data }: { data: PageData } = $props();
@@ -33,6 +34,7 @@
 	function toggleSelection(id: string) {
 		if (selectedIds.includes(id)) {
 			selectedIds = selectedIds.filter((i) => i !== id);
+			if (selectedIds.length === 0) selectionMode = false;
 		} else {
 			selectedIds = [...selectedIds, id];
 		}
@@ -44,12 +46,10 @@
 	}
 
 	function downloadFile(id: string) {
-		const link = document.createElement('a');
-		link.href = `/api/files/${id}/download`;
-		link.download = '';
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+		const video = videoFiles.find((v: any) => v.id === id);
+		if (video) {
+			downloadFileClient(video);
+		}
 	}
 
 	function downloadSelected() {

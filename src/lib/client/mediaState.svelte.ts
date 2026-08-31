@@ -89,23 +89,29 @@ export async function downloadFileClient(file: any, preview: boolean = false) {
 	const { get } = await import('svelte/store');
 	const { vaultKeyStore } = await import('$lib/client/encryptionStore');
 	const { decryptFileBlob } = await import('$lib/client/crypto');
+	const { toast } = await import('svelte-sonner');
 
 	const dek = get(vaultKeyStore);
 	if (!dek) {
-		alert('Cannot decrypt file: Encryption key not available in memory.');
+		toast.error('Cannot decrypt file: Encryption key not available in memory.');
 		return;
 	}
+
+	// Create a persistent loading toast
+	const toastId = toast.loading(`Downloading and decrypting ${file.fileName}...`, { duration: 999999 });
 
 	try {
 		const res = await fetch(url);
 		if (!res.ok) throw new Error('Failed to fetch file');
 		const encryptedBlob = await res.blob();
+		
 		const decryptedBlob = await decryptFileBlob(encryptedBlob, dek, file.mimeType);
 
 		const blobUrl = URL.createObjectURL(decryptedBlob);
 
 		if (preview) {
 			window.open(blobUrl, '_blank');
+			toast.dismiss(toastId);
 		} else {
 			const a = document.createElement('a');
 			a.href = blobUrl;
@@ -113,11 +119,18 @@ export async function downloadFileClient(file: any, preview: boolean = false) {
 			document.body.appendChild(a);
 			a.click();
 			document.body.removeChild(a);
-			URL.revokeObjectURL(blobUrl);
+			
+			// Success!
+			toast.success(`${file.fileName} downloaded successfully`, { id: toastId });
+
+			// Delay revoking the blob URL to give the browser time to save the file
+			setTimeout(() => {
+				URL.revokeObjectURL(blobUrl);
+			}, 60000); // 60 seconds
 		}
 	} catch (e) {
 		console.error('Failed to decrypt file', e);
-		alert('Failed to decrypt file.');
+		toast.error(`Failed to download ${file.fileName}`, { id: toastId });
 	}
 }
 

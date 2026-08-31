@@ -25,7 +25,7 @@
 		Loader2
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
-	import { media } from '$lib/client/mediaState.svelte';
+	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
 	import LyricsPanel from '$lib/components/music/LyricsPanel.svelte';
 
 	let { data } = $props<{ data: PageData }>();
@@ -53,12 +53,10 @@
 	}
 
 	function downloadFile(id: string) {
-		const link = document.createElement('a');
-		link.href = `/api/files/${id}/download`;
-		link.download = '';
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
+		const track = audioFiles.find((t: any) => t.id === id);
+		if (track) {
+			downloadFileClient(track);
+		}
 	}
 
 	function downloadSelected() {
