@@ -28,7 +28,7 @@
 				<img
 					alt="Shrimp Drive Logo"
 					class="h-10 w-10 object-contain"
-					src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGvKZiSWhKMKF4oL_J9_HFMU0WChW-H3PdTFKDH5fcwzeRD8cucxiu_m8SCwkkem_gncQ3pHQMY9XKT1E_Qo_Load05oN_wTLuSRdXuYGaOIOAuwO-Jy6LtN_Xg9SR377LbmXzEHCaItWXyb5TYNgLWxalFLC77QpW1a9iCyl4JMZYRXakuFTpelbzhSNjKiFehO624W8ZuGIfUwWxUCn8r76HAs-112uICmmFtYLuBBMM0ZqDiZD2"
+					src="/logo.webp"
 				/>
 				<h1 class="text-3xl font-bold text-white">Verify Email</h1>
 			</div>
