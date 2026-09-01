@@ -58,14 +58,14 @@
 		// Handle track changes
 		if (media.currentTrack) {
 			let cancelled = false;
-			
+
 			// Hard stop the audio element to prevent overlapping
 			if (audioElement) {
 				audioElement.pause();
 				audioElement.removeAttribute('src');
 				audioElement.load();
 			}
-			
+
 			audioSrc = undefined; // Immediately stop previous track
 			media.isLoadingTrack = true;
 			media.loadTrack(media.currentTrack).then((src) => {
@@ -91,7 +91,11 @@
 	});
 
 	let storagePercentage = $derived(
-		data.user ? data.user.storageLimit === -1 ? 0 : Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
+		data.user
+			? data.user.storageLimit === -1
+				? 0
+				: Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100)
+			: 0
 	);
 
 	let isVaultLocked = $state(false);
@@ -136,9 +140,12 @@
 				'Uh oh! That PIN or Password was incorrect.'
 			];
 			unlockError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
-			
+
 			if (failedAttempts >= 3) {
-				toast.error('Gagal 3 kali? Jika Anda baru saja mengubah password/PIN, coba refresh halaman ini dan masukkan password baru Anda.', { duration: 6000 });
+				toast.error(
+					'Gagal 3 kali? Jika Anda baru saja mengubah password/PIN, coba refresh halaman ini dan masukkan password baru Anda.',
+					{ duration: 6000 }
+				);
 			}
 		}
 		isUnlocking = false;
@@ -160,7 +167,9 @@
 {#if isVaultLocked}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div class="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0E14]/90 p-4 backdrop-blur-md">
+	<div
+		class="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0E14]/90 p-4 backdrop-blur-md"
+	>
 		<div class="w-full max-w-sm rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-2xl">
 			<div class="mb-4 flex flex-col items-center text-center">
 				<div class="mb-3 rounded-full bg-[#FF6B4A]/10 p-3 text-[#FF6B4A]">
@@ -168,13 +177,17 @@
 				</div>
 				<h2 class="text-xl font-bold text-white">Your Vault is Locked</h2>
 				<p class="mt-2 text-sm text-gray-400">
-					Please enter your {data.user?.googleId ? 'Vault PIN' : 'Account Password'} to unlock your files for this session.
+					Please enter your {data.user?.googleId ? 'Vault PIN' : 'Account Password'} to unlock your files
+					for this session.
 				</p>
 			</div>
-			
+
 			<form onsubmit={unlockVault} class="mt-6">
-				<div class="mb-4 group relative flex items-center">
-					<Lock class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]" size={20} />
+				<div class="group relative mb-4 flex items-center">
+					<Lock
+						class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]"
+						size={20}
+					/>
 					<input
 						bind:value={unlockPin}
 						type="password"
@@ -183,7 +196,7 @@
 						class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-3 pr-4 pl-10 text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 					/>
 				</div>
-				
+
 				{#if unlockError}
 					<p class="mb-4 text-center text-sm font-medium text-red-400">{unlockError}</p>
 				{/if}
@@ -232,7 +245,7 @@
 		<!-- Brand -->
 		<div class="flex h-[64px] items-center justify-between border-b border-[#2A3241] px-6">
 			<div class="flex items-center gap-2 text-xl font-bold text-[#FF6B4A]">
-				<span>🍤</span>
+				<img class="h-10 w-10 object-contain" alt="Shrimp Drive Logo" src="/logo.webp" />
 				<span class="text-white">Shrimp Drive</span>
 			</div>
 			<!-- Close button for mobile -->
@@ -310,7 +323,9 @@
 				<div class="mb-2 flex justify-between text-xs text-gray-400">
 					<span>Storage (Telegram)</span>
 					<span
-						>{formatBytes(data.user?.storageUsed || 0)} / {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}</span
+						>{formatBytes(data.user?.storageUsed || 0)} / {data.user?.storageLimit === -1
+							? 'Unlimited'
+							: formatBytes(data.user?.storageLimit || 0)}</span
 					>
 				</div>
 				<div class="h-1.5 w-full overflow-hidden rounded-full bg-[#0B0E14]">
@@ -411,7 +426,11 @@
 									}}
 									class="flex h-6 w-6 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
 									title={media.isLoadingTrack ? 'Loading...' : media.isPaused ? 'Play' : 'Pause'}
-									aria-label={media.isLoadingTrack ? 'Loading...' : media.isPaused ? 'Play' : 'Pause'}
+									aria-label={media.isLoadingTrack
+										? 'Loading...'
+										: media.isPaused
+											? 'Play'
+											: 'Pause'}
 								>
 									{#if media.isLoadingTrack}
 										<Loader2 size={12} class="animate-spin text-black" />
