@@ -11,6 +11,16 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ success: false, error: 'Username and password are required' }, { status: 400 });
 		}
 
+		// ponytail: debug log, remove after fix
+		console.log('Login attempt:', {
+			usernameMatch: username === env.ADMIN_USERNAME,
+			passwordMatch: password === env.ADMIN_PASSWORD,
+			envHasUsername: !!env.ADMIN_USERNAME,
+			envHasPassword: !!env.ADMIN_PASSWORD,
+			usernameLengths: { input: username.length, env: env.ADMIN_USERNAME?.length },
+			passwordLengths: { input: password.length, env: env.ADMIN_PASSWORD?.length }
+		});
+
 		if (username === env.ADMIN_USERNAME && password === env.ADMIN_PASSWORD) {
 			// Successful login, return the master key as the bearer token
 			return json({
