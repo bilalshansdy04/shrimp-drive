@@ -19,7 +19,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		return json({ success: false, error: 'Invalid credentials' }, { status: 401 });
-	} catch (error: any) {
+	} catch (error) {
 		console.error('Admin login error:', error);
 		return json({ success: false, error: 'Internal server error' }, { status: 500 });
 	}

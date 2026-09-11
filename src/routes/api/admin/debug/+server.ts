@@ -1,7 +1,12 @@
 import { json } from '@sveltejs/kit';
-import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
-export const GET = async () => {
-	const allUsers = await db.select().from(users);
-	return json(allUsers);
-};
+import { env } from '$env/dynamic/private';
+
+export const GET = async () =>
+	json({
+		hasUsername: !!env.ADMIN_USERNAME,
+		hasPassword: !!env.ADMIN_PASSWORD,
+		hasMasterKey: !!env.ADMIN_MASTER_KEY,
+		usernameLength: env.ADMIN_USERNAME?.length ?? 0,
+		passwordLength: env.ADMIN_PASSWORD?.length ?? 0,
+		masterKeyLength: env.ADMIN_MASTER_KEY?.length ?? 0
+	});
