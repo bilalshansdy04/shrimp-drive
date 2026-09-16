@@ -80,8 +80,9 @@ class UploadState {
 		const files = Array.from(fileList);
 		for (let i = 0; i < files.length; i++) {
 			const file = files[i];
-			if (file.size > 20 * 1024 * 1024) {
-				toast.error(`File ${file.name} exceeds 20MB limit.`);
+			// Remove 20MB limit since we're doing chunked uploads now (up to 50MB Telegram limit)
+			if (file.size > 50 * 1024 * 1024) {
+				toast.error(`File ${file.name} exceeds 50MB limit.`);
 				continue;
 			}
 			validFiles.push(file);
@@ -305,270 +306,77 @@ class UploadState {
 	}
 
 	private async uploadItemToVPS(item: UploadItem) {
-		item.status = 'extracting_thumb';
-
-		const formData = new FormData();
-		formData.append('file', item.file);
-
-		if (item.folderId) {
-			formData.append('folderId', item.folderId);
-		}
-		if (item.conflictAction) {
-			formData.append('conflictAction', item.conflictAction);
-		}
-		if (item.replaceFileId) {
-			formData.append('replaceFileId', item.replaceFileId);
-		}
-
-		const ext = item.file.name.split('.').pop()?.toLowerCase() || '';
-		const isAudio = item.file.type.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'].includes(ext);
-		const isVideo = item.file.type.startsWith('video/') || ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'wmv'].includes(ext);
-		const isImage = item.file.type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'svg', 'tiff', 'raw'].includes(ext);
-
-		if (isAudio) {
-			try {
-				const audioMeta = await musicMetadata.parseBlob(item.file);
-				if (audioMeta.common.title) formData.append('audioTitle', audioMeta.common.title);
-				if (audioMeta.common.artist) formData.append('audioArtist', audioMeta.common.artist);
-				if (audioMeta.common.album) formData.append('audioAlbum', audioMeta.common.album);
-				if (audioMeta.format.duration)
-					formData.append('audioDuration', audioMeta.format.duration.toString());
-
-				if (audioMeta.common.picture && audioMeta.common.picture.length > 0) {
-					const pic = audioMeta.common.picture[0];
-					const picBlob = new Blob([pic.data as unknown as BlobPart], { type: pic.format });
-					formData.append('audioThumbnail', picBlob, 'cover.jpg');
-				}
-			} catch (e) {
-				console.error('Audio metadata extraction failed', e);
-			}
-		} else if (isVideo) {
-			try {
-				const videoInfo = await new Promise<{ dataUrl: string | null; duration: number }>(
-					(resolve) => {
-						const video = document.createElement('video');
-						video.preload = 'metadata';
-						video.muted = true;
-						video.src = URL.createObjectURL(item.file);
-
-						video.onloadedmetadata = () => {
-							if (video.duration === Infinity) {
-								video.currentTime = 1e101;
-								video.ontimeupdate = () => {
-									video.ontimeupdate = null;
-									video.currentTime = 0;
-								};
-							}
-						};
-
-						video.onloadeddata = () => {
-							const safeDuration =
-								isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
-							video.currentTime = Math.min(1, safeDuration / 2 || 0);
-						};
-
-						video.onseeked = () => {
-							const canvas = document.createElement('canvas');
-							const ctx = canvas.getContext('2d');
-							const safeDuration =
-								isFinite(video.duration) && !isNaN(video.duration) ? video.duration : 0;
-							if (!ctx) return resolve({ dataUrl: null, duration: safeDuration });
-
-							const maxWidth = 320;
-							const scale = Math.min(1, maxWidth / video.videoWidth);
-							canvas.width = video.videoWidth * scale;
-							canvas.height = video.videoHeight * scale;
-
-							ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-							const dataUrl = canvas.toDataURL('image/webp', 0.8);
-							URL.revokeObjectURL(video.src);
-							resolve({ dataUrl, duration: safeDuration });
-						};
-
-						video.onerror = () => {
-							URL.revokeObjectURL(video.src);
-							resolve({ dataUrl: null, duration: 0 });
-						};
-					}
-				);
-
-				if (videoInfo.dataUrl) formData.append('videoThumbnail', videoInfo.dataUrl);
-				if (videoInfo.duration > 0) formData.append('videoDuration', videoInfo.duration.toString());
-			} catch (e) {
-				console.error('Thumbnail extraction failed', e);
-			}
-		} else if (isImage) {
-			try {
-				const imageThumbnail = await new Promise<string | null>((resolve) => {
-					const img = new window.Image();
-					img.onload = () => {
-						const canvas = document.createElement('canvas');
-						const ctx = canvas.getContext('2d');
-						if (!ctx) return resolve(null);
-
-						const maxWidth = 320;
-						const scale = Math.min(1, maxWidth / img.width);
-						canvas.width = img.width * scale;
-						canvas.height = img.height * scale;
-
-						ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-						const dataUrl = canvas.toDataURL('image/webp', 0.8);
-						URL.revokeObjectURL(img.src);
-						resolve(dataUrl);
-					};
-					img.onerror = () => {
-						URL.revokeObjectURL(img.src);
-						resolve(null);
-					};
-					img.src = URL.createObjectURL(item.file);
-				});
-
-				if (imageThumbnail) formData.append('imageThumbnail', imageThumbnail);
-			} catch (e) {
-				console.error('Image thumbnail extraction failed', e);
-			}
-		}
-
-		// Encrypt File Blob if required
-		let fileBlobToUpload: Blob = item.file;
-		const dek = get(vaultKeyStore);
-		const wantsEncryption =
-			this.encryptionMode === 'locked_on' ||
-			(this.encryptionMode === 'flexible' && this.isEncryptionActive);
+		const file = item.file;
+		const totalChunks = Math.ceil(file.size / (3.5 * 1024 * 1024));
+		const telegramFileIds: string[] = [];
 		
-		console.log('Upload Debug:', {
-			wantsEncryption,
-			encryptionMode: this.encryptionMode,
-			isEncryptionActive: this.isEncryptionActive,
-			hasDek: !!dek
-		});
+		item.status = 'uploading';
+		item.progress = 0;
 
-		if (wantsEncryption) {
-			if (!dek) {
-				console.error('Cannot encrypt: DEK is missing from memory!');
-				item.status = 'error';
-				item.errorMsg = 'Cannot encrypt: Missing Encryption Key';
-				return;
+		for (let i = 0; i < totalChunks; i++) {
+			const start = i * (3.5 * 1024 * 1024);
+			const end = Math.min(start + (3.5 * 1024 * 1024), file.size);
+			const chunkBlob = file.slice(start, end);
+
+			item.progress = Math.round((i / totalChunks) * 100);
+
+			const formData = new FormData();
+			formData.append('chunk', chunkBlob);
+			formData.append('chunkIndex', i.toString());
+			formData.append('fileName', file.name);
+
+			const res = await fetch('/api/files/upload-chunk', {
+				method: 'POST',
+				body: formData
+			});
+
+			if (!res.ok) {
+				const errorData = await res.json();
+				throw new Error(`Chunk ${i + 1} upload failed: ${errorData.error || 'Unknown error'}`);
 			}
-			try {
-				fileBlobToUpload = await encryptFileBlob(item.file, dek);
-				formData.append('isEncryptedClientSide', 'true');
-				
-				// Doomsday Backup: Encrypt metadata for Telegram Caption
-				const metadataToEncrypt = {
-					n: item.file.name,
-					s: item.file.size,
-					t: item.file.type
-				};
-				const encMeta = await encryptMetadata(metadataToEncrypt, dek);
-				formData.append('encryptedMetadata', encMeta);
-				
-				console.log('File and metadata encrypted successfully!');
-			} catch (e) {
-				console.error('File encryption failed', e);
-				item.status = 'error';
-				item.errorMsg = 'Encryption failed';
-				return;
+
+			const result = await res.json();
+			telegramFileIds.push(result.telegramFileId);
+
+			if (i < totalChunks - 1) {
+				await wait(5000);
 			}
 		}
 
-		// Overwrite the 'file' field with the (possibly encrypted) blob
-		formData.set('file', fileBlobToUpload, item.file.name);
-
-		item.status = 'uploading';
-
-		return new Promise<void>((resolveUpload) => {
-			const xhr = new XMLHttpRequest();
-			item._xhr = xhr;
-			let hasResolvedUpload = false;
-
-			const triggerUploadDone = (isRateLimited = false) => {
-				if (!hasResolvedUpload) {
-					hasResolvedUpload = true;
-					if (item.status === 'uploading' && !isRateLimited) {
-						item.status = 'queued_for_sending';
-					}
-					resolveUpload();
-				}
-			};
-
-			xhr.upload.addEventListener('progress', (event) => {
-				if (event.lengthComputable) {
-					item.progress = Math.round((event.loaded / event.total) * 100);
-					if (item.progress === 100) {
-						triggerUploadDone();
-					}
-				}
-			});
-
-			xhr.addEventListener('load', () => {
-				let success = false;
-				let errMsg = 'Upload failed';
-
-				if (xhr.status === 429) {
-					try {
-						const responseData = JSON.parse(xhr.responseText);
-						const retryAfter = responseData.retryAfter || 25;
-						this.globalCooldownUntil = Date.now() + retryAfter * 1000;
-					} catch {
-						this.globalCooldownUntil = Date.now() + 25000;
-					}
-					item.status = 'idle';
-					item.progress = 0;
-					triggerUploadDone(true);
-					return;
-				}
-
-				triggerUploadDone();
-
-				if (xhr.status >= 200 && xhr.status < 300) {
-					success = true;
-					item.progress = 100;
-				} else {
-					try {
-						const responseData = JSON.parse(xhr.responseText);
-						errMsg = responseData.error || 'Upload failed';
-					} catch {
-						errMsg = 'Upload failed';
-					}
-				}
-
-				if (item._resolveSend) {
-					item._resolveSend(success, errMsg);
-				} else {
-					item._sendFinished = true;
-					item._sendSuccess = success;
-					item._sendErr = errMsg;
-				}
-			});
-
-			xhr.addEventListener('error', () => {
-				triggerUploadDone();
-				item.status = 'error';
-				if (item._resolveSend) {
-					item._resolveSend(false, 'Connection error or aborted');
-				} else {
-					item._sendFinished = true;
-					item._sendSuccess = false;
-					item._sendErr = 'Connection error or aborted';
-				}
-			});
-
-			xhr.addEventListener('abort', () => {
-				triggerUploadDone();
-				item.status = 'error';
-				if (item._resolveSend) {
-					item._resolveSend(false, 'Upload aborted');
-				} else {
-					item._sendFinished = true;
-					item._sendSuccess = false;
-					item._sendErr = 'Upload aborted';
-				}
-			});
-
-			xhr.open('POST', '/api/files/upload');
-			xhr.send(formData);
+		const finalizeRes = await fetch('/api/files/finalize', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				name: file.name,
+				size: file.size,
+				mimeType: file.type || 'application/octet-stream',
+				fileType: this.getFileType(file.type, file.name),
+				folderId: item.folderId || null,
+				parts: telegramFileIds,
+				conflictAction: item.conflictAction || 'rename',
+				replaceFileId: item.replaceFileId || null
+			})
 		});
+
+		if (!finalizeRes.ok) {
+			const errorData = await finalizeRes.json();
+			throw new Error(`Finalization failed: ${errorData.error || 'Unknown error'}`);
+		}
+
+		item.progress = 100;
+		item.status = 'completed';
+	}
+
+	private getFileType(mimeType: string, fileName: string): string {
+		const ext = fileName.split('.').pop()?.toLowerCase()?.trim() || '';
+		const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'heic', 'svg', 'tiff', 'raw'];
+		const videoExts = ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'wmv'];
+		const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac'];
+
+		if (mimeType.startsWith('audio/') || audioExts.includes(ext)) return 'audio';
+		if (mimeType.startsWith('video/') || videoExts.includes(ext)) return 'video';
+		if (mimeType.startsWith('image/') || imageExts.includes(ext)) return 'image';
+		return 'document';
 	}
 }
 

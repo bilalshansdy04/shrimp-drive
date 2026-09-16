@@ -92,6 +92,8 @@ export const files = sqliteTable('files', {
 	fileSize: integer('file_size').notNull(), // in Bytes
 	telegramFileId: text('telegram_file_id').notNull(),
 	isEncrypted: integer('is_encrypted', { mode: 'boolean' }).default(false).notNull(),
+	isChunked: integer('is_chunked', { mode: 'boolean' }).default(false), // True if file split into multiple chunks
+	telegramFileIds: text('telegram_file_ids'), // JSON array of file_ids for chunked files: ["id1","id2"]
 
 	// Media Specific Metadata (Nullable)
 	title: text('title'),
