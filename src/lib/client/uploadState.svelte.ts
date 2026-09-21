@@ -82,9 +82,9 @@ class UploadState {
 		const files = Array.from(fileList);
 		for (let i = 0; i < files.length; i++) {
 			const file = files[i];
-			// Remove 20MB limit since we're doing chunked uploads now (up to 50MB Telegram limit)
-			if (file.size > 50 * 1024 * 1024) {
-				toast.error(`File ${file.name} exceeds 50MB limit.`);
+			// Limit file size to 1GB
+			if (file.size > 1024 * 1024 * 1024) {
+				toast.error(`File ${file.name} exceeds 1GB limit.`);
 				continue;
 			}
 			validFiles.push(file);
