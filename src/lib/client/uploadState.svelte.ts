@@ -48,6 +48,8 @@ class UploadState {
 	isEncryptionActive = $state(false);
 	encryptionMode = $state('flexible');
 
+	fileMetadata = new Map<string, { title?: string; artist?: string; album?: string; duration?: number; thumbnailUrl?: string }>();
+
 	get isRateLimited() {
 		return this.globalCooldownUntil > Date.now();
 	}
@@ -309,9 +311,42 @@ class UploadState {
 		const file = item.file;
 		const totalChunks = Math.ceil(file.size / (3.5 * 1024 * 1024));
 		const telegramFileIds: string[] = [];
+		const telegramMessageIds: number[] = [];
 		
 		item.status = 'uploading';
 		item.progress = 0;
+
+		// Extract metadata for audio files before chunking
+		let metadata: { title?: string; artist?: string; album?: string; duration?: number; thumbnailUrl?: string } = {};
+		const fileType = this.getFileType(file.type, file.name);
+		if (fileType === 'audio') {
+			try {
+				const parsed = await musicMetadata.parseBlob(file);
+				if (parsed.common?.title) metadata.title = parsed.common.title;
+				if (parsed.common?.artist) metadata.artist = parsed.common.artist;
+				if (parsed.common?.album) metadata.album = parsed.common.album;
+				if (parsed.format?.duration) metadata.duration = Math.round(parsed.format.duration);
+				if (parsed.common?.picture && parsed.common.picture.length > 0) {
+					const pic = parsed.common.picture[0];
+					const picBlob = new Blob([pic.data], { type: pic.format });
+					const canvas = document.createElement('canvas');
+					canvas.width = 200;
+					canvas.height = 200;
+					const ctx = canvas.getContext('2d');
+					if (ctx) {
+						const img = new Image();
+						img.onload = () => {
+							ctx.drawImage(img, 0, 0, 200, 200);
+							metadata.thumbnailUrl = canvas.toDataURL('image/jpeg');
+						};
+						img.src = URL.createObjectURL(picBlob);
+					}
+				}
+			} catch (e) {
+				console.error('Failed to extract audio metadata:', e);
+			}
+			this.fileMetadata.set(file.name, metadata);
+		}
 
 		for (let i = 0; i < totalChunks; i++) {
 			const start = i * (3.5 * 1024 * 1024);
@@ -337,6 +372,9 @@ class UploadState {
 
 			const result = await res.json();
 			telegramFileIds.push(result.telegramFileId);
+			if (result.telegramMessageId) {
+				telegramMessageIds.push(result.telegramMessageId);
+			}
 
 			if (i < totalChunks - 1) {
 				await wait(5000);
@@ -353,8 +391,10 @@ class UploadState {
 				fileType: this.getFileType(file.type, file.name),
 				folderId: item.folderId || null,
 				parts: telegramFileIds,
+				messageIds: telegramMessageIds,
 				conflictAction: item.conflictAction || 'rename',
-				replaceFileId: item.replaceFileId || null
+				replaceFileId: item.replaceFileId || null,
+				...metadata
 			})
 		});
 
@@ -365,6 +405,7 @@ class UploadState {
 
 		item.progress = 100;
 		item.status = 'completed';
+		await invalidateAll();
 	}
 
 	private getFileType(mimeType: string, fileName: string): string {

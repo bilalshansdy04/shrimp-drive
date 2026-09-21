@@ -25,8 +25,10 @@
 	import { formatBytes } from '$lib/utils';
 	import { media } from '$lib/client/mediaState.svelte';
 	import { uploadState } from '$lib/client/uploadState.svelte';
+	import { confirmModal } from '$lib/client/confirm.svelte';
 	import UploadPanel from '$lib/components/UploadPanel.svelte';
 	import { page } from '$app/stores';
+	import { fade } from 'svelte/transition';
 	import '../../app.css';
 
 	let isMusicRoute = $derived($page.url.pathname === '/music');
@@ -543,4 +545,27 @@
 		}}
 		autoplay
 	></audio>
+{/if}
+
+{#if confirmModal.show}
+	<div class="z-[100] fixed inset-0 flex justify-center items-center bg-black/60 backdrop-blur-sm p-4">
+		<div class="bg-[#151921] shadow-2xl p-6 border border-[#2A3241] rounded-2xl w-full max-w-sm" transition:fade={{ duration: 150 }}>
+			<h3 class="mb-2 font-medium text-lg text-white">Confirmation</h3>
+			<p class="mb-6 text-gray-400">{confirmModal.message}</p>
+			<div class="flex justify-end gap-3">
+				<button
+					onclick={confirmModal.onCancel}
+					class="bg-[#1A202A] hover:bg-[#2A3241] px-4 py-2 rounded-xl text-white transition-colors"
+				>
+					Cancel
+				</button>
+				<button
+					onclick={confirmModal.onConfirm}
+					class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl text-white transition-colors shadow-lg shadow-red-600/20"
+				>
+					Delete
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}

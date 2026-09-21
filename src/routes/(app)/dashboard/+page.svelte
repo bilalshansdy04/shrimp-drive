@@ -14,10 +14,12 @@
 		File
 	} from 'lucide-svelte';
 	import { formatBytes, formatDate } from '$lib/utils';
+	import { askConfirm } from '$lib/client/confirm.svelte';
 	import type { PageData } from './$types';
 	import { enhance } from '$app/forms';
 	import { toast } from 'svelte-sonner';
 	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
+	import { confirmDelete } from '$lib/utils/deleteConfirm';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -87,7 +89,7 @@
 
 <div class="mx-auto max-w-7xl">
 	<!-- Filters -->
-	<div class="mb-8 flex gap-3 overflow-x-auto pb-2">
+	<div class="flex gap-3 mb-8 pb-2 overflow-x-auto">
 		<button
 			class="rounded-full border border-[#2A3241] px-4 py-1.5 text-sm font-medium transition-colors duration-150 {filter ===
 			'all'
@@ -126,13 +128,13 @@
 	</div>
 
 	<!-- Analytics Grid -->
-	<div class="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+	<div class="gap-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 mb-8">
 		<!-- Total Storage -->
 		<div
-			class="flex flex-col items-center justify-center rounded-2xl border border-[#2A3241] bg-[#151921] p-6"
+			class="flex flex-col justify-center items-center bg-[#151921] p-6 border border-[#2A3241] rounded-2xl"
 		>
-			<div class="relative mb-3 h-24 w-24">
-				<svg class="h-full w-full -rotate-90 transform" viewBox="0 0 36 36">
+			<div class="relative mb-3 w-24 h-24">
+				<svg class="w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
 					<path
 						class="stroke-current text-[#1E2430]"
 						d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -148,50 +150,50 @@
 						stroke-width="3"
 					></path>
 				</svg>
-				<div class="absolute inset-0 flex items-center justify-center text-xl font-bold text-white">
+				<div class="absolute inset-0 flex justify-center items-center font-bold text-white text-xl">
 					{Math.round(percentage)}%
 				</div>
 			</div>
-			<h3 class="text-sm font-medium text-gray-400">Total Storage</h3>
-			<p class="mt-1 text-xs text-gray-500">
+			<h3 class="font-medium text-gray-400 text-sm">Total Storage</h3>
+			<p class="mt-1 text-gray-500 text-xs">
 				{formatBytes(data.user?.storageUsed || 0)} / {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}
 			</p>
 		</div>
 
 		<!-- Audio Vault -->
-		<div class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6">
-			<div class="mb-4 flex items-start justify-between">
+		<div class="bg-[#151921] p-6 border border-[#2A3241] rounded-2xl">
+			<div class="flex justify-between items-start mb-4">
 				<Music class="text-[#4edea3]" size={24} />
-				<span class="text-xs font-medium text-gray-400">{formatBytes(data.stats.audio.size)}</span>
+				<span class="font-medium text-gray-400 text-xs">{formatBytes(data.stats.audio.size)}</span>
 			</div>
-			<h3 class="mb-1 text-2xl font-bold text-white">Audio Vault</h3>
-			<p class="text-sm text-gray-400">{data.stats.audio.count} Tracks</p>
+			<h3 class="mb-1 font-bold text-white text-2xl">Audio Vault</h3>
+			<p class="text-gray-400 text-sm">{data.stats.audio.count} Tracks</p>
 		</div>
 
 		<!-- Visual Media -->
-		<div class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6">
-			<div class="mb-4 flex items-start justify-between">
+		<div class="bg-[#151921] p-6 border border-[#2A3241] rounded-2xl">
+			<div class="flex justify-between items-start mb-4">
 				<Video class="text-[#56d9d8]" size={24} />
-				<span class="text-xs font-medium text-gray-400"
+				<span class="font-medium text-gray-400 text-xs"
 					>{formatBytes(data.stats.video.size + data.stats.image.size)}</span
 				>
 			</div>
-			<h3 class="mb-1 text-2xl font-bold text-white">Visual Media</h3>
-			<p class="text-sm text-gray-400">
+			<h3 class="mb-1 font-bold text-white text-2xl">Visual Media</h3>
+			<p class="text-gray-400 text-sm">
 				{data.stats.video.count} Videos / {data.stats.image.count} Photos
 			</p>
 		</div>
 
 		<!-- Documents -->
-		<div class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6">
-			<div class="mb-4 flex items-start justify-between">
+		<div class="bg-[#151921] p-6 border border-[#2A3241] rounded-2xl">
+			<div class="flex justify-between items-start mb-4">
 				<FileText class="text-[#FF6B4A]" size={24} />
-				<span class="text-xs font-medium text-gray-400"
+				<span class="font-medium text-gray-400 text-xs"
 					>{formatBytes(data.stats.document.size)}</span
 				>
 			</div>
-			<h3 class="mb-1 text-2xl font-bold text-white">Documents</h3>
-			<p class="text-sm text-gray-400">{data.stats.document.count} Files</p>
+			<h3 class="mb-1 font-bold text-white text-2xl">Documents</h3>
+			<p class="text-gray-400 text-sm">{data.stats.document.count} Files</p>
 		</div>
 	</div>
 
@@ -215,83 +217,83 @@
 		onclick={triggerUploadClick}
 	>
 		<UploadCloud
-			class="mb-3 text-[#2A3241] transition-colors duration-150 group-hover:text-[#FF6B4A]"
+			class="mb-3 text-[#2A3241] group-hover:text-[#FF6B4A] transition-colors duration-150"
 			size={48}
 		/>
-		<p class="mb-1 text-base font-medium text-white">Drag and drop files here</p>
-		<p class="text-xs text-gray-400">or click to browse from your computer</p>
+		<p class="mb-1 font-medium text-white text-base">Drag and drop files here</p>
+		<p class="text-gray-400 text-xs">or click to browse from your computer</p>
 	</div>
 
 	<!-- Recent Files Table -->
-	<div class="overflow-hidden rounded-2xl border border-[#2A3241] bg-[#151921]">
-		<div class="flex items-center justify-between border-b border-[#2A3241] p-4">
-			<h2 class="text-lg font-semibold text-white">Recent Files</h2>
+	<div class="bg-[#151921] border border-[#2A3241] rounded-2xl overflow-hidden">
+		<div class="flex justify-between items-center p-4 border-[#2A3241] border-b">
+			<h2 class="font-semibold text-white text-lg">Recent Files</h2>
 			{#if filter !== 'all'}
-				<span class="text-xs text-gray-400 capitalize">{filter} only</span>
+				<span class="text-gray-400 text-xs capitalize">{filter} only</span>
 			{/if}
 		</div>
 
 		{#if filteredFiles.length === 0}
-			<div class="flex flex-col items-center justify-center p-12 text-center">
-				<div class="mb-4 rounded-full bg-[#1E2430] p-4">
+			<div class="flex flex-col justify-center items-center p-12 text-center">
+				<div class="bg-[#1E2430] mb-4 p-4 rounded-full">
 					<UploadCloud class="text-gray-400" size={32} />
 				</div>
-				<h3 class="mb-2 text-lg font-medium text-white">Belum ada file yang diunggah</h3>
-				<p class="max-w-sm text-sm text-gray-400">
+				<h3 class="mb-2 font-medium text-white text-lg">Belum ada file yang diunggah</h3>
+				<p class="max-w-sm text-gray-400 text-sm">
 					Mulai seret file ke Dropzone di atas untuk menyimpan file Anda secara aman di Shrimp
 					Drive!
 				</p>
 			</div>
 		{:else}
 			<div class="overflow-x-auto">
-				<table class="w-full border-collapse text-left">
+				<table class="w-full text-left border-collapse">
 					<thead>
-						<tr class="border-b border-[#2A3241] bg-[#0B0E14]">
+						<tr class="bg-[#0B0E14] border-[#2A3241] border-b">
 							<th
-								class="p-4 text-xs font-medium tracking-wider whitespace-nowrap text-gray-400 uppercase"
+								class="p-4 font-medium text-gray-400 text-xs uppercase tracking-wider whitespace-nowrap"
 								>Name</th
 							>
 							<th
-								class="p-4 text-xs font-medium tracking-wider whitespace-nowrap text-gray-400 uppercase"
+								class="p-4 font-medium text-gray-400 text-xs uppercase tracking-wider whitespace-nowrap"
 								>Type</th
 							>
 							<th
-								class="p-4 text-right text-xs font-medium tracking-wider whitespace-nowrap text-gray-400 uppercase tabular-nums"
+								class="p-4 font-medium tabular-nums text-gray-400 text-xs text-right uppercase tracking-wider whitespace-nowrap"
 								>Size</th
 							>
 							<th
-								class="p-4 text-right text-xs font-medium tracking-wider whitespace-nowrap text-gray-400 uppercase tabular-nums"
+								class="p-4 font-medium tabular-nums text-gray-400 text-xs text-right uppercase tracking-wider whitespace-nowrap"
 								>Date</th
 							>
 							<th
-								class="p-4 text-center text-xs font-medium tracking-wider whitespace-nowrap text-gray-400 uppercase"
+								class="p-4 font-medium text-gray-400 text-xs text-center uppercase tracking-wider whitespace-nowrap"
 								>Actions</th
 							>
 						</tr>
 					</thead>
-					<tbody class="text-sm text-gray-300">
+					<tbody class="text-gray-300 text-sm">
 						{#each filteredFiles as file}
 							{@const Icon = getFileIcon(file.fileType)}
 							<tr
-								class="group border-b border-[#2A3241] transition-colors duration-150 last:border-0 hover:bg-[#1E2430]"
+								class="group hover:bg-[#1E2430] border-[#2A3241] last:border-0 border-b transition-colors duration-150"
 							>
 								<td class="flex items-center gap-3 p-4 whitespace-nowrap">
 									<Icon class={getIconColor(file.fileType)} size={20} />
 									<span
-										class="max-w-[200px] truncate text-white sm:max-w-[300px]"
+										class="max-w-[200px] sm:max-w-[300px] text-white truncate"
 										title={file.fileName}>{file.fileName}</span
 									>
 								</td>
-								<td class="p-4 whitespace-nowrap text-gray-400 capitalize">{file.fileType}</td>
-								<td class="p-4 text-right text-xs whitespace-nowrap text-gray-400 tabular-nums"
+								<td class="p-4 text-gray-400 capitalize whitespace-nowrap">{file.fileType}</td>
+								<td class="p-4 tabular-nums text-gray-400 text-xs text-right whitespace-nowrap"
 									>{formatBytes(file.fileSize)}</td
 								>
-								<td class="p-4 text-right text-xs whitespace-nowrap text-gray-400 tabular-nums"
+								<td class="p-4 tabular-nums text-gray-400 text-xs text-right whitespace-nowrap"
 									>{formatDate(file.createdAt)}</td
 								>
 								<td class="p-4 text-center whitespace-nowrap">
 									<div
-										class="flex items-center justify-center gap-2 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+										class="flex justify-center items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
 									>
 										{#if file.fileType === 'audio'}
 											<button
@@ -320,32 +322,29 @@
 										{/if}
 										<button
 											onclick={() => downloadFileClient(file)}
-											class="flex items-center justify-center text-gray-400 hover:text-white"
+											class="flex justify-center items-center text-gray-400 hover:text-white"
 											title="Download"><Download size={18} /></button
 										>
-										<form
-											method="POST"
-											action="?/delete"
-											class="flex inline items-center justify-center"
-											use:enhance={() => {
-												const tid = toast.loading('Deleting file...');
-												return async ({ result, update }) => {
-													if (result.type === 'success') {
+										<button
+											onclick={async () => {
+												if (await askConfirm('Delete this file? This cannot be undone.')) {
+													const tid = toast.loading('Deleting file...');
+													const res = await fetch('/api/bulk/delete', {
+														method: 'POST',
+														headers: { 'Content-Type': 'application/json' },
+														body: JSON.stringify({ files: [file.id], folders: [] })
+													});
+													if (res.ok) {
 														toast.success('File deleted successfully', { id: tid });
-														await update();
+														await invalidateAll();
 													} else {
 														toast.error('Failed to delete file', { id: tid });
 													}
-												};
+												}
 											}}
+											class="text-[#EF4444] hover:text-[#F87171]"
+											title="Delete"><Trash2 size={18} /></button
 										>
-											<input type="hidden" name="fileId" value={file.id} />
-											<button
-												type="submit"
-												class="text-[#EF4444] hover:text-[#F87171]"
-												title="Delete"><Trash2 size={18} /></button
-											>
-										</form>
 									</div>
 								</td>
 							</tr>

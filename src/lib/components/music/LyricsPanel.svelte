@@ -4,6 +4,7 @@
 	import { Disc, Music2, Edit3, Loader2, Search } from 'lucide-svelte';
 
 	import { toast } from 'svelte-sonner';
+	import { askConfirm } from '$lib/client/confirm.svelte';
 
 	let loading = $state(false);
 	let status = $state<'loading' | 'found' | 'not_found'>('loading');
@@ -143,7 +144,7 @@
 
 	async function clearLyrics() {
 		if (!currentTrackId) return;
-		if (!confirm('Are you sure you want to remove lyrics?')) return;
+		if (!(await askConfirm('Are you sure you want to remove lyrics?'))) return;
 		saving = true;
 		try {
 			const res = await fetch(`/api/files/${currentTrackId}/lyrics`, {

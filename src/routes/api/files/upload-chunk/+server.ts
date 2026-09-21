@@ -57,7 +57,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			success: true,
 			telegramFileId: fileObj.file_id,
 			telegramFileName: fileObj.file_name,
-			telegramFileSize: fileObj.file_size
+			telegramFileSize: fileObj.file_size,
+			telegramMessageId: tgData.result.message_id
 		});
 	} catch (error: any) {
 		console.error('Upload chunk error:', error);

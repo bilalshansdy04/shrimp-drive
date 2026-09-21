@@ -89,3 +89,28 @@ export async function deleteTelegramMessage(botToken: string, chatId: string, me
 
 	return data.result;
 }
+
+export async function deleteTelegramMessages(botToken: string, chatId: string, messageIds: number[]) {
+	if (messageIds.length === 0) return true;
+	
+	const url = `https://api.telegram.org/bot${botToken}/deleteMessages`;
+
+	const res = await fetch(url, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			chat_id: chatId,
+			message_ids: messageIds
+		})
+	});
+	const data = await res.json();
+
+	if (!data.ok) {
+		console.error(`Failed to delete messages from Telegram:`, data.description);
+		throw new Error(data.description || 'Failed to delete messages from Telegram');
+	}
+
+	return data.result;
+}

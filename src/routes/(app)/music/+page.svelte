@@ -22,11 +22,16 @@
 		Check,
 		Download,
 		X,
-		Loader2
+		Loader2,
+		Trash2
 	} from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
+	import { invalidateAll } from '$app/navigation';
 	import LyricsPanel from '$lib/components/music/LyricsPanel.svelte';
+	import { confirmDelete, confirmDeleteMultiple } from '$lib/utils/deleteConfirm';
+	import { askConfirm } from '$lib/client/confirm.svelte';
+	import { toast } from 'svelte-sonner';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -66,6 +71,27 @@
 			}, index * 500);
 		});
 		toggleSelectionMode();
+	}
+
+	async function deleteSelected() {
+		if (selectedIds.length === 0) return;
+		await confirmDeleteMultiple(selectedIds.length, async () => {
+			const res = await fetch('/api/bulk/delete', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ files: Array.from(selectedIds), folders: [] })
+			});
+
+			if (res.ok) {
+				selectedIds = [];
+				if (selectionMode) selectionMode = false;
+				await invalidateAll();
+				return true;
+			} else {
+				console.error('Failed to delete selected tracks:', await res.text());
+				return false;
+			}
+		});
 	}
 
 	function longpress(
@@ -202,11 +228,11 @@
 	}
 </script>
 
-<div class="mx-auto max-w-[1280px] pb-24">
-	<div class="mb-6 flex items-end justify-between">
+<div class="mx-auto pb-24 max-w-[1280px]">
+	<div class="flex justify-between items-end mb-6">
 		<div>
-			<h1 class="mb-1 text-3xl font-bold text-white">Music Library</h1>
-			<p class="text-sm text-gray-400">{audioFiles.length} tracks • {formatBytes(totalSize)}</p>
+			<h1 class="mb-1 font-bold text-white text-3xl">Music Library</h1>
+			<p class="text-gray-400 text-sm">{audioFiles.length} tracks • {formatBytes(totalSize)}</p>
 		</div>
 
 		<div class="flex items-center gap-2">
@@ -234,16 +260,16 @@
 				{#if showSortMenu}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div class="fixed inset-0 z-40" onclick={() => (showSortMenu = false)}></div>
+					<div class="z-40 fixed inset-0" onclick={() => (showSortMenu = false)}></div>
 					<div
-						class="absolute top-full right-0 z-50 mt-2 w-48 rounded-xl border border-[#2A3241] bg-[#151921] p-1 shadow-xl"
+						class="top-full right-0 z-50 absolute bg-[#151921] shadow-xl mt-2 p-1 border border-[#2A3241] rounded-xl w-48"
 					>
-						<div class="px-3 py-2 text-xs font-semibold tracking-wider text-gray-500 uppercase">
+						<div class="px-3 py-2 font-semibold text-gray-500 text-xs uppercase tracking-wider">
 							SORT BY
 						</div>
 
 						<button
-							class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#1E2430] hover:text-white"
+							class="flex justify-between items-center hover:bg-[#1E2430] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm text-left"
 							class:text-[#FF6B4A]={sortBy === 'date'}
 							onclick={() => {
 								sortBy = 'date';
@@ -254,7 +280,7 @@
 							{#if sortBy === 'date'}<Check size={14} />{/if}
 						</button>
 						<button
-							class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#1E2430] hover:text-white"
+							class="flex justify-between items-center hover:bg-[#1E2430] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm text-left"
 							class:text-[#FF6B4A]={sortBy === 'name'}
 							onclick={() => {
 								sortBy = 'name';
@@ -265,7 +291,7 @@
 							{#if sortBy === 'name'}<Check size={14} />{/if}
 						</button>
 						<button
-							class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#1E2430] hover:text-white"
+							class="flex justify-between items-center hover:bg-[#1E2430] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm text-left"
 							class:text-[#FF6B4A]={sortBy === 'artist'}
 							onclick={() => {
 								sortBy = 'artist';
@@ -276,7 +302,7 @@
 							{#if sortBy === 'artist'}<Check size={14} />{/if}
 						</button>
 						<button
-							class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#1E2430] hover:text-white"
+							class="flex justify-between items-center hover:bg-[#1E2430] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm text-left"
 							class:text-[#FF6B4A]={sortBy === 'album'}
 							onclick={() => {
 								sortBy = 'album';
@@ -287,10 +313,10 @@
 							{#if sortBy === 'album'}<Check size={14} />{/if}
 						</button>
 
-						<div class="my-1 border-t border-[#2A3241]"></div>
+						<div class="my-1 border-[#2A3241] border-t"></div>
 
 						<button
-							class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#1E2430] hover:text-white"
+							class="flex justify-between items-center hover:bg-[#1E2430] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm text-left"
 							class:text-[#FF6B4A]={sortOrder === 'asc'}
 							onclick={() => {
 								sortOrder = 'asc';
@@ -301,7 +327,7 @@
 							{#if sortOrder === 'asc'}<Check size={14} />{/if}
 						</button>
 						<button
-							class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#1E2430] hover:text-white"
+							class="flex justify-between items-center hover:bg-[#1E2430] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm text-left"
 							class:text-[#FF6B4A]={sortOrder === 'desc'}
 							onclick={() => {
 								sortOrder = 'desc';
@@ -316,7 +342,7 @@
 			</div>
 			<button
 				onclick={() => (viewMode = viewMode === 'list' ? 'grid' : 'list')}
-				class="flex items-center justify-center rounded-lg border border-[#2A3241] bg-[#151921] p-2 text-gray-400 transition-colors hover:bg-[#1E2430] hover:text-white"
+				class="flex justify-center items-center bg-[#151921] hover:bg-[#1E2430] p-2 border border-[#2A3241] rounded-lg text-gray-400 hover:text-white transition-colors"
 				title="Toggle View"
 			>
 				{#if viewMode === 'list'}
@@ -330,35 +356,35 @@
 
 	{#if showLyrics}
 		<div
-			class="mb-6 h-[calc(100vh-16rem)] min-h-[400px] overflow-hidden rounded-2xl border border-[#2A3241]"
+			class="mb-6 border border-[#2A3241] rounded-2xl h-[calc(100vh-16rem)] min-h-[400px] overflow-hidden"
 		>
 			<LyricsPanel />
 		</div>
 	{:else}
-		<div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+		<div class="gap-4 grid grid-cols-1 lg:grid-cols-3 mb-6">
 			<div
-				class="bg-primary-container col-span-1 flex flex-col items-center gap-6 rounded-2xl p-6 text-black md:flex-row lg:col-span-2"
+				class="flex md:flex-row flex-col items-center gap-6 col-span-1 lg:col-span-2 bg-primary-container p-6 rounded-2xl text-black"
 			>
 				<div
-					class="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl shadow-lg md:h-32 md:w-32"
+					class="relative shadow-lg rounded-xl w-24 md:w-32 h-24 md:h-32 overflow-hidden shrink-0"
 				>
 					{#if media.currentTrack && media.currentTrack.thumbnailUrl}
 						<img
 							src={media.currentTrack.thumbnailUrl}
 							alt="Cover"
-							class="h-full w-full object-cover"
+							class="w-full h-full object-cover"
 						/>
 					{:else}
-						<div class="flex h-full w-full items-center justify-center bg-black/20 text-black/50">
+						<div class="flex justify-center items-center bg-black/20 w-full h-full text-black/50">
 							<Music size={40} />
 						</div>
 					{/if}
 				</div>
-				<div class="flex-1 text-center md:text-left">
-					<div class="mb-2 text-xs font-semibold tracking-wider text-black/70 uppercase">
+				<div class="flex-1 md:text-left text-center">
+					<div class="mb-2 font-semibold text-black/70 text-xs uppercase tracking-wider">
 						Now Playing
 					</div>
-					<h2 class="mb-1 text-2xl font-bold md:text-3xl">
+					<h2 class="mb-1 font-bold text-2xl md:text-3xl">
 						{media.currentTrack
 							? media.currentTrack.title || media.currentTrack.fileName
 							: 'No Track Selected'}
@@ -371,10 +397,10 @@
 					onclick={() => {
 						if (!media.isLoadingTrack) media.togglePlay();
 					}}
-					class="flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-xl transition-transform hover:scale-105 active:scale-95"
+					class="flex justify-center items-center bg-black shadow-xl rounded-full w-16 h-16 text-white hover:scale-105 active:scale-95 transition-transform"
 				>
 					{#if media.isLoadingTrack}
-						<Loader2 size={24} class="animate-spin text-white" />
+						<Loader2 size={24} class="text-white animate-spin" />
 					{:else if media.isPaused}
 						<Play size={24} fill="currentColor" class="ml-1" />
 					{:else}
@@ -384,52 +410,52 @@
 			</div>
 
 			<div
-				class="flex flex-col justify-between rounded-2xl border border-[#2A3241] bg-[#151921] p-6"
+				class="flex flex-col justify-between bg-[#151921] p-6 border border-[#2A3241] rounded-2xl"
 			>
 				<div>
-					<h3 class="mb-4 flex items-center gap-2 text-sm font-medium text-gray-400">
+					<h3 class="flex items-center gap-2 mb-4 font-medium text-gray-400 text-sm">
 						<ListMusic size={18} /> Up Next
 					</h3>
 
 					{#if media.currentIndex !== -1 && media.currentIndex < media.playlist.length - 1}
 						{@const nextTrack = media.playlist[media.currentIndex + 1]}
 						<div
-							class="flex items-center gap-4 rounded-lg border border-[#2A3241] bg-[#0B0E14] p-3"
+							class="flex items-center gap-4 bg-[#0B0E14] p-3 border border-[#2A3241] rounded-lg"
 						>
-							<div class="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-[#2A3241]">
+							<div class="bg-[#2A3241] rounded-md w-12 h-12 overflow-hidden shrink-0">
 								{#if nextTrack.thumbnailUrl}
 									<img
 										src={nextTrack.thumbnailUrl || defaultMusicCover}
 										onerror={(e) => ((e.currentTarget as HTMLImageElement).src = defaultMusicCover)}
 										alt="Cover"
-										class="h-full w-full object-cover"
+										class="w-full h-full object-cover"
 									/>
 								{:else}
-									<div class="flex h-full w-full items-center justify-center text-gray-500">
+									<div class="flex justify-center items-center w-full h-full text-gray-500">
 										<Music size={20} />
 									</div>
 								{/if}
 							</div>
-							<div class="flex min-w-0 flex-1 flex-col">
-								<span class="truncate text-sm font-medium text-white"
+							<div class="flex flex-col flex-1 min-w-0">
+								<span class="font-medium text-white text-sm truncate"
 									>{nextTrack.title || nextTrack.fileName}</span
 								>
-								<span class="truncate text-xs text-gray-400"
+								<span class="text-gray-400 text-xs truncate"
 									>{nextTrack.artist || 'Unknown Artist'}</span
 								>
 							</div>
 						</div>
 					{:else}
 						<div
-							class="flex h-20 items-center justify-center rounded-lg border border-dashed border-[#2A3241] text-xs text-gray-500"
+							class="flex justify-center items-center border border-[#2A3241] border-dashed rounded-lg h-20 text-gray-500 text-xs"
 						>
 							End of playlist
 						</div>
 					{/if}
 				</div>
-				<div class="mt-4 flex items-center justify-between border-t border-[#2A3241] pt-4">
-					<span class="text-xs text-gray-400">Current Bitrate</span>
-					<span class="text-xs font-medium text-[#FF6B4A]">
+				<div class="flex justify-between items-center mt-4 pt-4 border-[#2A3241] border-t">
+					<span class="text-gray-400 text-xs">Current Bitrate</span>
+					<span class="font-medium text-[#FF6B4A] text-xs">
 						{media.currentTrack
 							? formatBitrate(media.currentTrack.fileSize, media.currentTrack.duration)
 							: '---'}
@@ -438,22 +464,22 @@
 			</div>
 		</div>
 
-		<div class="overflow-hidden rounded-2xl border border-[#2A3241] bg-[#151921] shadow-lg">
-			<div class="flex items-center justify-between border-b border-[#2A3241] p-4">
+		<div class="bg-[#151921] shadow-lg border border-[#2A3241] rounded-2xl overflow-hidden">
+			<div class="flex justify-between items-center p-4 border-[#2A3241] border-b">
 				{#if selectionMode && viewMode === 'grid'}
-					<div class="flex flex-1 items-center justify-between">
+					<div class="flex flex-1 justify-between items-center">
 						<div class="flex items-center gap-3 text-[#FF6B4A]">
 							<button onclick={toggleSelectionMode}><X size={20} /></button>
-							<span class="text-sm font-medium sm:text-base">{selectedIds.length} Selected</span>
+							<span class="font-medium text-sm sm:text-base">{selectedIds.length} Selected</span>
 						</div>
 						<div class="flex items-center gap-3">
 							<button
 								onclick={() => (selectedIds = audioFiles.map((f) => f.id))}
-								class="text-sm font-medium text-[#FF6B4A] hover:underline">Select All</button
+								class="font-medium text-[#FF6B4A] text-sm hover:underline">Select All</button
 							>
 							<button
 								onclick={downloadSelected}
-								class="flex items-center gap-1 rounded bg-[#FF6B4A] px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50"
+								class="flex items-center gap-1 bg-[#FF6B4A] disabled:opacity-50 px-3 py-1.5 rounded font-medium text-black text-sm"
 								disabled={selectedIds.length === 0}
 							>
 								<Download size={16} /> <span class="hidden sm:inline">Download</span>
@@ -463,21 +489,21 @@
 				{:else}
 					<button
 						onclick={() => media.playTrack(0, audioFiles)}
-						class="bg-primary-container flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-black transition-transform hover:scale-105"
+						class="flex items-center gap-2 bg-primary-container px-5 py-2.5 rounded-full font-medium text-black text-sm hover:scale-105 transition-transform"
 					>
 						<Play size={18} fill="currentColor" /> Play All
 					</button>
-					<span class="text-xs text-gray-400">{audioFiles.length} items</span>
+					<span class="text-gray-400 text-xs">{audioFiles.length} items</span>
 				{/if}
 			</div>
 			{#if audioFiles.length === 0}
-				<div class="flex flex-col items-center justify-center p-12 text-center text-gray-400">
-					<Music size={32} class="mb-4 opacity-50" />
+				<div class="flex flex-col justify-center items-center p-12 text-gray-400 text-center">
+					<Music size={32} class="opacity-50 mb-4" />
 					<p>No tracks found.</p>
 				</div>
 			{:else if viewMode === 'list'}
 				<div class="w-full">
-					<table class="w-full table-fixed border-collapse text-left">
+					<table class="w-full text-left border-collapse table-fixed">
 						<thead>
 							<tr
 								class="border-b {selectionMode
@@ -495,16 +521,16 @@
 										#
 									{/if}
 								</th>
-								<th class="px-2 py-3 text-xs font-medium text-gray-400 sm:px-4">
+								<th class="px-2 sm:px-4 py-3 font-medium text-gray-400 text-xs">
 									{#if selectionMode}
-										<div class="flex flex-1 items-center justify-start text-[#FF6B4A]">
+										<div class="flex flex-1 justify-start items-center text-[#FF6B4A]">
 											<div class="flex items-center gap-3 sm:gap-4">
-												<span class="text-sm font-medium sm:text-base"
+												<span class="font-medium text-sm sm:text-base"
 													>{selectedIds.length} Selected</span
 												>
 												<button
 													onclick={() => (selectedIds = audioFiles.map((f) => f.id))}
-													class="text-sm font-medium hover:underline">Select All</button
+													class="font-medium text-sm hover:underline">Select All</button
 												>
 											</div>
 										</div>
@@ -512,39 +538,41 @@
 										Name
 									{/if}
 								</th>
-								<th class="hidden px-4 py-3 text-xs font-medium text-gray-400 sm:table-cell">
+								<th class="hidden sm:table-cell px-4 py-3 font-medium text-gray-400 text-xs">
 									{#if !selectionMode}Artist{/if}
 								</th>
 								<th
-									class="hidden w-24 px-4 py-3 text-right text-xs font-medium text-gray-400 sm:table-cell"
+									class="hidden sm:table-cell px-4 py-3 w-24 font-medium text-gray-400 text-xs text-right"
 								>
 									{#if !selectionMode}Duration{/if}
 								</th>
 								<th
-									class="hidden w-28 px-4 py-3 text-right text-xs font-medium text-gray-400 md:table-cell"
+									class="hidden md:table-cell px-4 py-3 w-28 font-medium text-gray-400 text-xs text-right"
 								>
 									{#if !selectionMode}Bitrate{/if}
 								</th>
 								<th
-									class="hidden w-32 px-4 py-3 text-right text-xs font-medium text-gray-400 lg:table-cell"
+									class="hidden lg:table-cell px-4 py-3 w-32 font-medium text-gray-400 text-xs text-right"
 								>
 									{#if !selectionMode}Added{/if}
 								</th>
-								<th class="w-12 px-2 py-3 text-center sm:w-16">
+								<th class="px-2 py-3 w-12 sm:w-16 text-center">
 									{#if selectionMode}
-										<button
-											onclick={downloadSelected}
-											class="mx-auto flex h-7 w-7 items-center justify-center rounded bg-[#FF6B4A] text-black transition-opacity hover:opacity-90 disabled:opacity-50 sm:h-8 sm:w-8"
-											disabled={selectedIds.length === 0}
-											title="Download Selected"
-										>
-											<Download size={16} />
-										</button>
+										<div class="flex justify-center gap-1">
+											<button
+												onclick={downloadSelected}
+												class="flex justify-center items-center bg-[#FF6B4A] hover:opacity-90 disabled:opacity-50 mx-auto rounded w-7 sm:w-8 h-7 sm:h-8 text-black transition-opacity"
+												disabled={selectedIds.length === 0}
+												title="Download Selected"
+											>
+												<Download size={16} />
+											</button>
+										</div>
 									{/if}
 								</th>
 							</tr>
 						</thead>
-						<tbody class="divide-y divide-[#2A3241]/50 text-sm text-white">
+						<tbody class="divide-y divide-[#2A3241]/50 text-white text-sm">
 							{#each audioFiles as track, index}
 								<tr
 									class="group cursor-pointer transition-colors hover:bg-[#1E2430] {selectionMode &&
@@ -568,7 +596,7 @@
 										}
 									}}
 								>
-									<td class="px-2 py-3 text-center text-xs text-gray-400 sm:px-4">
+									<td class="px-2 sm:px-4 py-3 text-gray-400 text-xs text-center">
 										{#if selectionMode}
 											<div
 												class="h-4 w-4 rounded border {selectedIds.includes(track.id)
@@ -581,11 +609,11 @@
 											</div>
 										{:else if media.currentTrack?.id === track.id}
 											{#if media.isLoadingTrack}
-												<div class="mx-auto flex h-full items-center justify-center text-primary">
+												<div class="flex justify-center items-center mx-auto h-full text-primary">
 													<Loader2 size={14} class="animate-spin" />
 												</div>
 											{:else if !media.isPaused}
-												<div class="text-primary-container mx-auto h-3 w-3">
+												<div class="mx-auto w-3 h-3 text-primary-container">
 													<svg
 														xmlns="http://www.w3.org/2000/svg"
 														viewBox="0 0 24 24"
@@ -595,25 +623,27 @@
 													</svg>
 												</div>
 											{:else}
-												<div class="text-gray-400 mx-auto h-3 w-3">
-													<span class="text-xs font-bold font-mono">{(index + 1).toString().padStart(2, '0')}</span>
+												<div class="mx-auto w-3 h-3 text-gray-400">
+													<span class="font-mono font-bold text-xs"
+														>{(index + 1).toString().padStart(2, '0')}</span
+													>
 												</div>
 											{/if}
 										{:else}
-											<span class="text-xs text-gray-500 group-hover:hidden">{index + 1}</span>
+											<span class="group-hover:hidden text-gray-500 text-xs">{index + 1}</span>
 											<Play
 												size={14}
-												class="mx-auto hidden text-gray-400 group-hover:block group-hover:text-white"
+												class="hidden group-hover:block mx-auto text-gray-400 group-hover:text-white"
 											/>
 										{/if}
 									</td>
-									<td class="px-2 py-3 sm:px-4">
+									<td class="px-2 sm:px-4 py-3">
 										<div class="flex items-center gap-3">
 											<div
-												class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border border-[#2A3241] bg-[#10131a]"
+												class="flex justify-center items-center bg-[#10131a] border border-[#2A3241] rounded w-8 h-8 overflow-hidden shrink-0"
 											>
 												<img
-													class="h-full w-full object-cover"
+													class="w-full h-full object-cover"
 													alt="Cover"
 													src={track.thumbnailUrl || defaultMusicCover}
 													onerror={(e) =>
@@ -621,34 +651,57 @@
 												/>
 											</div>
 											<span
-												class="max-w-[150px] truncate font-medium text-gray-300 transition-colors group-hover:text-white sm:max-w-xs"
+												class="max-w-[150px] sm:max-w-xs font-medium text-gray-300 group-hover:text-white truncate transition-colors"
 												>{track.title || track.fileName}</span
 											>
 										</div>
 									</td>
-									<td class="hidden max-w-[120px] truncate px-4 py-3 text-gray-400 sm:table-cell"
+									<td class="hidden sm:table-cell px-4 py-3 max-w-[120px] text-gray-400 truncate"
 										>{track.artist || 'Unknown Artist'}</td
 									>
 									<td
-										class="hidden px-4 py-3 text-right text-xs text-gray-400 tabular-nums sm:table-cell"
+										class="hidden sm:table-cell px-4 py-3 tabular-nums text-gray-400 text-xs text-right"
 										>{formatTime(track.duration || 0)}</td
 									>
 									<td
-										class="hidden px-4 py-3 text-right text-xs text-gray-400 tabular-nums md:table-cell"
+										class="hidden md:table-cell px-4 py-3 tabular-nums text-gray-400 text-xs text-right"
 										>{formatBitrate(track.fileSize, track.duration)}</td
 									>
-									<td class="hidden px-4 py-3 text-right text-xs text-gray-400 lg:table-cell"
+									<td class="hidden lg:table-cell px-4 py-3 text-gray-400 text-xs text-right"
 										>{formatDate(track.createdAt)}</td
 									>
 									<td class="px-2 py-3 text-center">
-										<button
-											onclick={(e) => {
-												e.stopPropagation();
-												downloadFile(track.id);
-											}}
-											class="text-gray-400 opacity-100 transition-opacity group-hover:opacity-100 hover:text-[#FF6B4A] sm:opacity-0"
-											title="Download"><Download size={18} /></button
-										>
+										<div class="flex justify-center items-center gap-1">
+											<button
+												onclick={(e) => {
+													e.stopPropagation();
+													downloadFile(track.id);
+												}}
+												class="opacity-100 sm:opacity-0 group-hover:opacity-100 text-gray-400 hover:text-[#FF6B4A] transition-opacity"
+												title="Download"><Download size={18} /></button
+											>
+											<button
+												onclick={async (e) => {
+													e.stopPropagation();
+													if (await askConfirm('Delete this track? This cannot be undone.')) {
+														const tid = toast.loading('Deleting track...');
+														const res = await fetch('/api/bulk/delete', {
+															method: 'POST',
+															headers: { 'Content-Type': 'application/json' },
+															body: JSON.stringify({ files: [track.id], folders: [] })
+														});
+														if (res.ok) {
+															toast.success('Track deleted successfully', { id: tid });
+															await invalidateAll();
+														} else {
+															toast.error('Failed to delete track', { id: tid });
+														}
+													}
+												}}
+												class="opacity-100 sm:opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-opacity"
+												title="Delete"><Trash2 size={18} /></button
+											>
+										</div>
 									</td>
 								</tr>
 							{/each}
@@ -656,7 +709,7 @@
 					</table>
 				</div>
 			{:else}
-				<div class="grid grid-cols-2 gap-4 p-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+				<div class="gap-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 p-6">
 					{#each audioFiles as track, index}
 						<div
 							class="group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border border-[#2A3241] bg-[#10131a] transition-colors hover:border-[#FF6B4A] {selectionMode &&
@@ -693,21 +746,21 @@
 									{/if}
 								</div>
 							{/if}
-							<div class="relative aspect-square w-full overflow-hidden bg-black/40">
+							<div class="relative bg-black/40 w-full aspect-square overflow-hidden">
 								<img
 									src={track.thumbnailUrl || defaultMusicCover}
 									onerror={(e) => ((e.currentTarget as HTMLImageElement).src = defaultMusicCover)}
 									alt="Cover"
-									class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+									class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
 								/>
 								<div
-									class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100"
+									class="absolute inset-0 flex justify-center items-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"
 								>
 									<div
-										class="flex h-12 w-12 items-center justify-center rounded-full bg-[#FF6B4A] text-black shadow-lg"
+										class="flex justify-center items-center bg-[#FF6B4A] shadow-lg rounded-full w-12 h-12 text-black"
 									>
 										{#if media.currentTrack?.id === track.id && media.isLoadingTrack}
-											<Loader2 size={24} class="animate-spin text-black" />
+											<Loader2 size={24} class="text-black animate-spin" />
 										{:else if media.currentTrack?.id === track.id && !media.isPaused}
 											<Pause size={24} fill="currentColor" />
 										{:else}
@@ -717,12 +770,47 @@
 								</div>
 							</div>
 							<div class="flex flex-col p-3">
-								<span class="truncate text-sm font-medium text-white"
+								<span class="font-medium text-white text-sm truncate"
 									>{track.title || track.fileName}</span
 								>
-								<span class="truncate text-xs text-gray-400"
+								<span class="text-gray-400 text-xs truncate"
 									>{track.artist || 'Unknown Artist'}</span
 								>
+							</div>
+							<div class="right-2 bottom-2 z-10 absolute flex items-center gap-1">
+								<button
+									onclick={(e) => {
+										e.stopPropagation();
+										downloadFile(track.id);
+									}}
+									class="flex justify-center items-center bg-[#FF6B4A] hover:opacity-90 rounded-full w-7 h-7 text-black transition-opacity"
+									title="Download"
+								>
+									<Download size={14} />
+								</button>
+								<button
+									onclick={async (e) => {
+										e.stopPropagation();
+										if (await askConfirm('Delete this track? This cannot be undone.')) {
+											const tid = toast.loading('Deleting track...');
+											const res = await fetch('/api/bulk/delete', {
+												method: 'POST',
+												headers: { 'Content-Type': 'application/json' },
+												body: JSON.stringify({ files: [track.id], folders: [] })
+											});
+											if (res.ok) {
+												toast.success('Track deleted successfully', { id: tid });
+												await invalidateAll();
+											} else {
+												toast.error('Failed to delete track', { id: tid });
+											}
+										}
+									}}
+									class="flex justify-center items-center bg-red-600 hover:opacity-90 rounded-full w-7 h-7 text-white transition-opacity"
+									title="Delete"
+								>
+									<Trash2 size={14} />
+								</button>
 							</div>
 						</div>
 					{/each}
@@ -734,12 +822,12 @@
 
 {#if media.currentTrack}
 	<div
-		class="fixed right-0 bottom-0 left-0 z-50 flex h-auto flex-col items-center justify-between border-t border-[#2A3241] bg-[#0B0E14]/95 p-3 backdrop-blur md:left-[260px] md:h-24 md:flex-row md:p-0 md:px-6"
+		class="right-0 bottom-0 left-0 md:left-[260px] z-50 fixed flex md:flex-row flex-col justify-between items-center bg-[#0B0E14]/95 backdrop-blur p-3 md:p-0 md:px-6 border-[#2A3241] border-t h-auto md:h-24"
 	>
 		<!-- Mobile Progress Bar -->
-		<div class="absolute top-0 right-0 left-0 h-1 bg-[#2A3241] md:hidden">
+		<div class="md:hidden top-0 right-0 left-0 absolute bg-[#2A3241] h-1">
 			<div
-				class="h-full bg-[#FF6B4A]"
+				class="bg-[#FF6B4A] h-full"
 				style="width: {media.duration ? (media.currentTime / media.duration) * 100 : 0}%;"
 			></div>
 			<input
@@ -748,41 +836,41 @@
 				max={media.duration || 100}
 				value={media.currentTime}
 				oninput={handleSeek}
-				class="absolute inset-0 w-full cursor-pointer opacity-0"
+				class="absolute inset-0 opacity-0 w-full cursor-pointer"
 			/>
 		</div>
 
 		<!-- Left: Cover & Info -->
-		<div class="flex w-full min-w-0 items-center justify-between gap-4 md:w-1/3 md:justify-start">
-			<div class="flex min-w-0 flex-1 items-center gap-3">
+		<div class="flex justify-between md:justify-start items-center gap-4 w-full md:w-1/3 min-w-0">
+			<div class="flex flex-1 items-center gap-3 min-w-0">
 				<div
-					class="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[#2A3241] shadow-md md:h-14 md:w-14"
+					class="bg-[#2A3241] shadow-md rounded-lg w-12 md:w-14 h-12 md:h-14 overflow-hidden shrink-0"
 				>
 					<img
 						src={media.currentTrack.thumbnailUrl || defaultMusicCover}
 						onerror={(e) => ((e.currentTarget as HTMLImageElement).src = defaultMusicCover)}
 						alt="Cover"
-						class="h-full w-full object-cover"
+						class="w-full h-full object-cover"
 					/>
 				</div>
-				<div class="flex min-w-0 flex-col">
-					<span class="truncate text-sm font-medium text-white md:text-base"
+				<div class="flex flex-col min-w-0">
+					<span class="font-medium text-white text-sm md:text-base truncate"
 						>{media.currentTrack.title || media.currentTrack.fileName}</span
 					>
-					<span class="truncate text-xs text-gray-400 md:text-sm"
+					<span class="text-gray-400 text-xs md:text-sm truncate"
 						>{media.currentTrack.artist || 'Unknown Artist'}</span
 					>
 				</div>
 			</div>
 
-			<button class="ml-2 hidden text-gray-400 hover:text-white md:block">
+			<button class="hidden md:block ml-2 text-gray-400 hover:text-white">
 				<Heart size={18} />
 			</button>
 
 			<!-- Mobile Controls -->
-			<div class="flex shrink-0 items-center gap-3 md:hidden">
+			<div class="md:hidden flex items-center gap-3 shrink-0">
 				<button
-					class="text-gray-400 transition-colors hover:text-white"
+					class="text-gray-400 hover:text-white transition-colors"
 					class:text-[#FF6B4A]={showLyrics}
 					onclick={() => (showLyrics = !showLyrics)}
 					title="Toggle Lyrics"
@@ -790,13 +878,13 @@
 					<Mic2 size={20} />
 				</button>
 				<button
-					class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
+					class="flex justify-center items-center bg-white rounded-full w-10 h-10 text-black hover:scale-105 transition-transform"
 					onclick={() => {
 						if (!media.isLoadingTrack) media.togglePlay();
 					}}
 				>
 					{#if media.isLoadingTrack}
-						<Loader2 size={18} class="animate-spin text-black" />
+						<Loader2 size={18} class="text-black animate-spin" />
 					{:else if media.isPaused}
 						<Play size={18} fill="currentColor" class="ml-0.5" />
 					{:else}
@@ -810,20 +898,20 @@
 		</div>
 
 		<!-- Center: Controls (Desktop) -->
-		<div class="hidden max-w-lg flex-1 flex-col items-center gap-2 md:flex">
+		<div class="hidden md:flex flex-col flex-1 items-center gap-2 max-w-lg">
 			<div class="flex items-center gap-6">
 				<button class="text-gray-400 hover:text-white"><Repeat size={18} /></button>
 				<button class="text-gray-400 hover:text-white" onclick={() => media.playPrev()}
 					><SkipBack size={20} fill="currentColor" /></button
 				>
 				<button
-					class="flex h-10 w-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105"
+					class="flex justify-center items-center bg-white rounded-full w-10 h-10 text-black hover:scale-105 transition-transform"
 					onclick={() => {
 						if (!media.isLoadingTrack) media.togglePlay();
 					}}
 				>
 					{#if media.isLoadingTrack}
-						<Loader2 size={18} class="animate-spin text-black" />
+						<Loader2 size={18} class="text-black animate-spin" />
 					{:else if media.isPaused}
 						<Play size={18} fill="currentColor" class="ml-0.5" />
 					{:else}
@@ -835,8 +923,8 @@
 				>
 				<button class="text-gray-400 hover:text-white"><Shuffle size={18} /></button>
 			</div>
-			<div class="flex w-full items-center gap-3">
-				<span class="w-10 text-right text-xs text-gray-400 tabular-nums"
+			<div class="flex items-center gap-3 w-full">
+				<span class="w-10 tabular-nums text-gray-400 text-xs text-right"
 					>{formatTime(media.currentTime)}</span
 				>
 				<input
@@ -848,16 +936,16 @@
 					style="background-size: {media.duration
 						? (media.currentTime / media.duration) * 100
 						: 0}% 100%;"
-					class="accent-primary-container from-primary-container to-primary-container h-1 flex-1 cursor-pointer appearance-none rounded-full bg-[#2A3241] bg-gradient-to-r bg-no-repeat"
+					class="flex-1 bg-[#2A3241] bg-gradient-to-r from-primary-container to-primary-container bg-no-repeat rounded-full h-1 accent-primary-container appearance-none cursor-pointer"
 				/>
-				<span class="w-10 text-xs text-gray-400 tabular-nums">{formatTime(media.duration)}</span>
+				<span class="w-10 tabular-nums text-gray-400 text-xs">{formatTime(media.duration)}</span>
 			</div>
 		</div>
 
 		<!-- Right: Volume & Extras (Desktop) -->
-		<div class="hidden w-1/3 justify-end gap-4 pr-2 md:flex">
+		<div class="hidden md:flex justify-end gap-4 pr-2 w-1/3">
 			<button
-				class="text-gray-400 transition-colors hover:text-white"
+				class="text-gray-400 hover:text-white transition-colors"
 				class:text-[#FF6B4A]={showLyrics}
 				onclick={() => (showLyrics = !showLyrics)}
 				title="Toggle Lyrics"
@@ -880,7 +968,7 @@
 					value={media.volume}
 					oninput={handleVolume}
 					style="background-size: {media.volume * 100}% 100%;"
-					class="h-1 w-24 cursor-pointer appearance-none rounded-full bg-[#2A3241] bg-gradient-to-r from-white to-white bg-no-repeat accent-white opacity-0 transition-opacity group-hover:opacity-100"
+					class="bg-[#2A3241] bg-gradient-to-r from-white to-white bg-no-repeat opacity-0 group-hover:opacity-100 rounded-full w-24 h-1 transition-opacity accent-white appearance-none cursor-pointer"
 				/>
 			</div>
 		</div>

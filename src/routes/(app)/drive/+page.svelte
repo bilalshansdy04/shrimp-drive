@@ -24,6 +24,8 @@
 	import { invalidateAll } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
+	import { confirmDelete, confirmDeleteMultiple } from '$lib/utils/deleteConfirm';
+	import { askConfirm } from '$lib/client/confirm.svelte';
 
 	let { data } = $props<{ data: PageData }>();
 
@@ -169,16 +171,17 @@
 	}
 
 	async function deleteFolder(id: string) {
-		if (!confirm('Are you sure you want to delete this folder and ALL its contents?')) return;
-
-		const res = await fetch(`/api/folders/${id}`, { method: 'DELETE' });
-		if (res.ok) {
-			toast.success('Folder deleted');
-			invalidateAll();
-		} else {
-			const json = await res.json();
-			toast.error(json.error || 'Failed to delete folder');
-		}
+		await confirmDelete('folder', async () => {
+			const res = await fetch(`/api/folders/${id}`, { method: 'DELETE' });
+			if (res.ok) {
+				await invalidateAll();
+				return true;
+			} else {
+				const json = await res.json();
+				toast.error(json.error || 'Failed to delete folder');
+				return false;
+			}
+		});
 	}
 
 	async function openMoveModal(id: string, type: 'file' | 'folder', category: string, multi = false) {
@@ -222,22 +225,23 @@
 	}
 
 	async function deleteSelected() {
-		if (!confirm(`Are you sure you want to delete ${selectedFiles.size + selectedFolders.size} selected items?`)) return;
+		await confirmDeleteMultiple(selectedFiles.size + selectedFolders.size, async () => {
+			const res = await fetch('/api/bulk/delete', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ files: Array.from(selectedFiles), folders: Array.from(selectedFolders) })
+			});
 
-		const res = await fetch('/api/bulk/delete', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ files: Array.from(selectedFiles), folders: Array.from(selectedFolders) })
+			if (res.ok) {
+				clearSelection();
+				await invalidateAll();
+				return true;
+			} else {
+				const json = await res.json();
+				toast.error(json.error || 'Failed to delete items');
+				return false;
+			}
 		});
-
-		if (res.ok) {
-			toast.success('Items deleted');
-			clearSelection();
-			invalidateAll();
-		} else {
-			const json = await res.json();
-			toast.error(json.error || 'Failed to delete items');
-		}
 	}
 
 	function getFileIcon(type: string) {
@@ -259,7 +263,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	role="region"
-	class="flex h-full flex-col overflow-y-auto p-6"
+	class="flex flex-col p-6 h-full overflow-y-auto"
 	ondragover={(e) => {
 		e.preventDefault();
 		isDragging = true;
@@ -270,21 +274,21 @@
 	<!-- Drag Overlay -->
 	{#if isDragging}
 		<div
-			class="fixed inset-0 z-50 flex items-center justify-center bg-[#0B0E14]/90 backdrop-blur-sm"
+			class="z-50 fixed inset-0 flex justify-center items-center bg-[#0B0E14]/90 backdrop-blur-sm"
 		>
-			<div class="text-primary flex flex-col items-center">
+			<div class="flex flex-col items-center text-primary">
 				<UploadCloud size={64} class="mb-4 animate-bounce" />
-				<h2 class="text-2xl font-bold">Drop files to upload here</h2>
+				<h2 class="font-bold text-2xl">Drop files to upload here</h2>
 			</div>
 		</div>
 	{/if}
 
 	<!-- Header & Storage Stats -->
 	<div
-		class="mb-8 flex items-center gap-4 rounded-2xl border border-[#2A3241] bg-[#151921] p-4 md:gap-6 md:p-6"
+		class="flex items-center gap-4 md:gap-6 bg-[#151921] mb-8 p-4 md:p-6 border border-[#2A3241] rounded-2xl"
 	>
-		<div class="relative flex h-16 w-16 shrink-0 items-center justify-center">
-			<svg class="h-full w-full -rotate-90 transform" viewBox="0 0 36 36">
+		<div class="relative flex justify-center items-center w-16 h-16 shrink-0">
+			<svg class="w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
 				<path
 					class="text-[#2A3241]"
 					d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -303,46 +307,46 @@
 				/>
 			</svg>
 			<div class="absolute flex flex-col items-center">
-				<span class="text-xs font-bold text-white">{Math.round(percentage)}%</span>
+				<span class="font-bold text-white text-xs">{Math.round(percentage)}%</span>
 			</div>
 		</div>
 		<div class="flex-1">
-			<h2 class="text-lg font-bold text-white">Storage Overview</h2>
-			<p class="text-sm text-gray-400">
+			<h2 class="font-bold text-white text-lg">Storage Overview</h2>
+			<p class="text-gray-400 text-sm">
 				{formatBytes(data.user?.storageUsed || 0)} used of {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}
 			</p>
 		</div>
 	</div>
 
 	<!-- Breadcrumbs & Actions -->
-	<div class="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-		<div class="flex flex-wrap items-center gap-2 text-sm text-gray-400">
-			<a href="/drive" class="flex items-center gap-1 transition-colors hover:text-white">
+	<div class="flex sm:flex-row flex-col justify-between items-start sm:items-center gap-4 mb-6">
+		<div class="flex flex-wrap items-center gap-2 text-gray-400 text-sm">
+			<a href="/drive" class="flex items-center gap-1 hover:text-white transition-colors">
 				<Home size={16} /> Home
 			</a>
 			{#each data.breadcrumbs as crumb}
 				<ChevronRight size={14} class="shrink-0" />
 				<a
 					href={`/drive?folder=${crumb.id}`}
-					class="max-w-[150px] truncate transition-colors hover:text-white"
+					class="max-w-[150px] hover:text-white truncate transition-colors"
 				>
 					{crumb.name}
 				</a>
 			{/each}
 		</div>
 
-		<div class="flex w-full items-center gap-3 sm:w-auto">
+		<div class="flex items-center gap-3 w-full sm:w-auto">
 			{#if currentFolderId}
 				<button
 					onclick={() => (showNewFolderModal = true)}
-					class="hover:border-primary-container flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#2A3241] bg-[#151921] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#1A202A] sm:flex-none"
+					class="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-[#151921] hover:bg-[#1A202A] px-4 py-2.5 border border-[#2A3241] hover:border-primary-container rounded-xl font-medium text-white text-sm transition-colors"
 				>
 					<FolderPlus size={18} /> New Folder
 				</button>
 			{/if}
 			<!-- <button
 				onclick={triggerUploadClick}
-				class="flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-xl bg-primary-container px-4 py-2.5 text-sm font-medium text-primary transition-colors hover:bg-primary-container/80"
+				class="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-primary-container hover:bg-primary-container/80 px-4 py-2.5 rounded-xl font-medium text-primary text-sm transition-colors"
 			>
 				<UploadCloud size={18} /> Upload Files
 			</button> -->
@@ -352,12 +356,12 @@
 	<!-- Empty State -->
 	{#if data.childFolders.length === 0 && data.recentFiles.length === 0}
 		<div
-			class="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-[#2A3241] p-6 text-center md:p-12"
+			class="flex flex-col flex-1 justify-center items-center p-6 md:p-12 border border-[#2A3241] border-dashed rounded-2xl text-center"
 		>
-			<div class="mb-4 rounded-full bg-[#151921] p-4 text-gray-400">
+			<div class="bg-[#151921] mb-4 p-4 rounded-full text-gray-400">
 				<Folder size={48} />
 			</div>
-			<h3 class="mb-2 text-xl font-bold text-white">This folder is empty</h3>
+			<h3 class="mb-2 font-bold text-white text-xl">This folder is empty</h3>
 			<p class="max-w-sm text-gray-400">
 				Create a new folder or upload files to start organizing your media.
 			</p>
@@ -365,8 +369,8 @@
 	{:else}
 		<!-- Folders Grid -->
 		{#if data.childFolders.length > 0}
-			<h3 class="mb-4 text-sm font-semibold tracking-wider text-gray-400 uppercase">Folders</h3>
-			<div class="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+			<h3 class="mb-4 font-semibold text-gray-400 text-sm uppercase tracking-wider">Folders</h3>
+			<div class="gap-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 mb-8">
 				{#each data.childFolders as folder}
 					<div
 						class="group hover:border-primary-container relative flex items-center gap-3 rounded-xl border border-[#2A3241] p-4 transition-all hover:bg-[#1A202A] {selectedFolders.has(folder.id) ? 'bg-[#1A202A] border-primary-container ring-1 ring-primary-container' : 'bg-[#151921]'}"
@@ -378,37 +382,37 @@
 									type="checkbox"
 									checked={selectedFolders.has(folder.id)}
 									onchange={() => toggleFolder(folder.id)}
-									class="h-4 w-4 cursor-pointer accent-primary"
+									class="w-4 h-4 accent-primary cursor-pointer"
 								/>
 							</div>
 						{/if}
 
 						<a
 							href={`/drive?folder=${folder.id}`}
-							class="absolute inset-0 z-10"
+							class="z-10 absolute inset-0"
 							aria-label={`Open folder ${folder.name}`}
 						></a>
-						<Folder size={24} class="shrink-0 text-blue-500" />
-						<div class="min-w-0 flex-1">
-							<p class="truncate font-medium text-white" title={folder.name}>{folder.name}</p>
-							<p class="text-xs text-gray-500 capitalize">{folder.category}</p>
+						<Folder size={24} class="text-blue-500 shrink-0" />
+						<div class="flex-1 min-w-0">
+							<p class="font-medium text-white truncate" title={folder.name}>{folder.name}</p>
+							<p class="text-gray-500 text-xs capitalize">{folder.category}</p>
 						</div>
 
 						<!-- Folder Menu -->
 						{#if currentFolderId}
-							<div class="relative z-20">
+							<div class="z-20 relative">
 							<button
-								class="rounded-lg p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+								class="hover:bg-white/10 p-1 rounded-lg text-gray-400 hover:text-white"
 								onclick={(e) => toggleMenu(`folder-${folder.id}`, e)}
 							>
 								<MoreVertical size={18} />
 							</button>
 							{#if activeMenu === `folder-${folder.id}`}
 								<div
-									class="absolute top-full right-0 z-50 mt-2 w-48 rounded-xl border border-[#2A3241] bg-[#151921] p-1 shadow-xl"
+									class="top-full right-0 z-50 absolute bg-[#151921] shadow-xl mt-2 p-1 border border-[#2A3241] rounded-xl w-48"
 								>
 									<button
-										class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-[#1A202A] hover:text-white"
+										class="flex items-center gap-2 hover:bg-[#1A202A] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm"
 										onclick={() => {
 											renameFolderId = folder.id;
 											renameFolderName = folder.name;
@@ -419,7 +423,7 @@
 										<Edit2 size={16} /> Rename
 									</button>
 									<button
-										class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-[#1A202A] hover:text-white"
+										class="flex items-center gap-2 hover:bg-[#1A202A] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm"
 										onclick={() => {
 											if (selectedFolders.has(folder.id)) {
 												openMoveModal('', 'file', folder.category, true);
@@ -432,7 +436,7 @@
 										<CornerDownRight size={16} /> Move to...
 									</button>
 									<button
-										class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
+										class="flex items-center gap-2 hover:bg-red-500/10 px-3 py-2 rounded-lg w-full text-red-400 text-sm"
 										onclick={() => {
 											if (selectedFolders.has(folder.id)) {
 												deleteSelected();
@@ -455,7 +459,7 @@
 
 		<!-- Files List -->
 		{#if data.recentFiles.length > 0}
-			<h3 class="mb-4 text-sm font-semibold tracking-wider text-gray-400 uppercase">Files</h3>
+			<h3 class="mb-4 font-semibold text-gray-400 text-sm uppercase tracking-wider">Files</h3>
 			<div class="flex flex-col gap-2">
 				{#each data.recentFiles as file}
 					{@const Icon = getFileIcon(file.fileType)}
@@ -468,52 +472,52 @@
 								type="checkbox"
 								checked={selectedFiles.has(file.id)}
 								onchange={() => toggleFile(file.id)}
-								class="h-4 w-4 cursor-pointer accent-primary"
+								class="w-4 h-4 accent-primary cursor-pointer"
 							/>
 						</div>
 						
 						{#if file.fileType === 'audio'}
 							<button
 								onclick={() => media.playTrack(0, [file])}
-								class="absolute inset-0 z-10"
+								class="z-10 absolute inset-0"
 								aria-label={`Play ${file.fileName}`}
 							></button>
 						{:else if file.fileType === 'video'}
 							<a
 								href={`/video/${file.id}`}
-								class="absolute inset-0 z-10"
+								class="z-10 absolute inset-0"
 								aria-label={`View ${file.fileName}`}
 							></a>
 						{:else if file.fileType === 'photo' || file.fileType === 'image'}
 							<a
 								href={`/photo?view=${file.id}`}
-								class="absolute inset-0 z-10"
+								class="z-10 absolute inset-0"
 								aria-label={`View ${file.fileName}`}
 							></a>
 						{:else if file.fileType === 'document'}
 							<a
 								href={`/docs/${file.id}`}
-								class="absolute inset-0 z-10"
+								class="z-10 absolute inset-0"
 								aria-label={`View ${file.fileName}`}
 							></a>
 						{:else}
 							<button
 								onclick={() => downloadFileClient(file)}
-								class="absolute inset-0 z-10"
+								class="z-10 absolute inset-0"
 								aria-label={`Download ${file.fileName}`}
 							></button>
 						{/if}
-						<div class="flex min-w-0 flex-1 items-center gap-4">
+						<div class="flex flex-1 items-center gap-4 min-w-0">
 							<div
-								class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-800"
+								class="flex justify-center items-center bg-gray-800 rounded-lg w-10 h-10 shrink-0"
 							>
 								<Icon size={20} class="text-gray-400" />
 							</div>
-							<div class="min-w-0 flex-1">
-								<h4 class="truncate font-medium text-white" title={file.fileName}>
+							<div class="flex-1 min-w-0">
+								<h4 class="font-medium text-white truncate" title={file.fileName}>
 									{file.fileName}
 								</h4>
-								<div class="flex items-center gap-2 text-xs text-gray-500">
+								<div class="flex items-center gap-2 text-gray-500 text-xs">
 									<span>{formatBytes(file.fileSize)}</span>
 									<span>•</span>
 									<span class="capitalize">{file.fileType}</span>
@@ -521,40 +525,40 @@
 							</div>
 						</div>
 
-						<div class="flex shrink-0 items-center gap-2">
+						<div class="flex items-center gap-2 shrink-0">
 							<!-- Direct file actions (visual only, handled by absolute overlay) -->
 							{#if file.fileType === 'audio'}
-								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white">
+								<div class="p-2 rounded-lg text-gray-400 group-hover:text-white">
 									<Play size={18} />
 								</div>
 							{:else if file.fileType === 'video'}
-								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white">
+								<div class="p-2 rounded-lg text-gray-400 group-hover:text-white">
 									<Play size={18} />
 								</div>
 							{:else if file.fileType === 'photo' || file.fileType === 'image'}
-								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white">
+								<div class="p-2 rounded-lg text-gray-400 group-hover:text-white">
 									<Eye size={18} />
 								</div>
 							{:else}
-								<div class="rounded-lg p-2 text-gray-400 group-hover:text-white">
+								<div class="p-2 rounded-lg text-gray-400 group-hover:text-white">
 									<Eye size={18} />
 								</div>
 							{/if}
 
 							<!-- File Menu -->
-							<div class="relative z-20">
+							<div class="z-20 relative">
 								<button
-									class="rounded-lg p-1 text-gray-400 hover:bg-white/10 hover:text-white"
+									class="hover:bg-white/10 p-1 rounded-lg text-gray-400 hover:text-white"
 									onclick={(e) => toggleMenu(`file-${file.id}`, e)}
 								>
 									<MoreVertical size={18} />
 								</button>
 								{#if activeMenu === `file-${file.id}`}
 									<div
-										class="absolute top-full right-0 z-50 mt-2 w-48 rounded-xl border border-[#2A3241] bg-[#151921] p-1 shadow-xl"
+										class="top-full right-0 z-50 absolute bg-[#151921] shadow-xl mt-2 p-1 border border-[#2A3241] rounded-xl w-48"
 									>
 										<button
-											class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-300 hover:bg-[#1A202A] hover:text-white"
+											class="flex items-center gap-2 hover:bg-[#1A202A] px-3 py-2 rounded-lg w-full text-gray-300 hover:text-white text-sm"
 											onclick={() => {
 												if (selectedFiles.has(file.id)) {
 													openMoveModal('', 'file', data.currentFolder?.category || 'document', true);
@@ -566,35 +570,34 @@
 										>
 											<CornerDownRight size={16} /> Move to...
 										</button>
-										<form
-											method="POST"
-											action="?/delete"
-											use:enhance={() => {
-												return async ({ result }) => {
-													if (result.type === 'success') {
-														toast.success('File deleted');
-														invalidateAll();
-													} else {
-														toast.error('Failed to delete file');
+										<button
+											class="flex items-center gap-2 hover:bg-red-500/10 px-3 py-2 rounded-lg w-full text-red-400 text-sm"
+											onclick={async (e) => {
+												if (selectedFiles.has(file.id)) {
+													e.preventDefault();
+													deleteSelected();
+													activeMenu = null;
+												} else {
+													activeMenu = null;
+													if (await askConfirm('Delete this file? This cannot be undone.')) {
+														const tid = toast.loading('Deleting file...');
+														const res = await fetch('/api/bulk/delete', {
+															method: 'POST',
+															headers: { 'Content-Type': 'application/json' },
+															body: JSON.stringify({ files: [file.id], folders: [] })
+														});
+														if (res.ok) {
+															toast.success('File deleted', { id: tid });
+															invalidateAll();
+														} else {
+															toast.error('Failed to delete file', { id: tid });
+														}
 													}
-												};
+												}
 											}}
 										>
-											<input type="hidden" name="fileId" value={file.id} />
-											<button
-												type={selectedFiles.has(file.id) ? "button" : "submit"}
-												class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10"
-												onclick={(e) => {
-													if (selectedFiles.has(file.id)) {
-														e.preventDefault();
-														deleteSelected();
-														activeMenu = null;
-													}
-												}}
-											>
-												<Trash2 size={16} /> Delete
-											</button>
-										</form>
+											<Trash2 size={16} /> Delete
+										</button>
 									</div>
 								{/if}
 							</div>
@@ -608,47 +611,47 @@
 
 <!-- Modals -->
 {#if showNewFolderModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-		<div class="w-full max-w-md rounded-2xl border border-[#2A3241] bg-[#0B0E14] p-6 shadow-2xl">
-			<h3 class="mb-4 text-xl font-bold text-white">Create New Folder</h3>
+	<div class="z-50 fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-sm p-4">
+		<div class="bg-[#0B0E14] shadow-2xl p-6 border border-[#2A3241] rounded-2xl w-full max-w-md">
+			<h3 class="mb-4 font-bold text-white text-xl">Create New Folder</h3>
 			<div class="space-y-4">
 				<div>
-					<label class="mb-1 block text-sm text-gray-400">Folder Name</label>
+					<label class="block mb-1 text-gray-400 text-sm">Folder Name</label>
 					<input
 						type="text"
 						bind:value={newFolderName}
 						placeholder="E.g. Summer Vacation"
-						class="focus:border-primary-container w-full rounded-xl border border-[#2A3241] bg-[#151921] px-4 py-2.5 text-white outline-none"
+						class="bg-[#151921] px-4 py-2.5 border border-[#2A3241] focus:border-primary-container rounded-xl outline-none w-full text-white"
 					/>
 				</div>
 				<!-- Only ask category if we are in Root folder -->
 				{#if !currentFolderId}
 					<div>
-						<label class="mb-1 block text-sm text-gray-400">Folder Category</label>
+						<label class="block mb-1 text-gray-400 text-sm">Folder Category</label>
 						<select
 							bind:value={newFolderCategory}
-							class="focus:border-primary-container w-full rounded-xl border border-[#2A3241] bg-[#151921] px-4 py-2.5 text-white outline-none"
+							class="bg-[#151921] px-4 py-2.5 border border-[#2A3241] focus:border-primary-container rounded-xl outline-none w-full text-white"
 						>
 							<option value="document">Document</option>
 							<option value="audio">Audio / Music</option>
 							<option value="video">Video</option>
 							<option value="image">Image / Photo</option>
 						</select>
-						<p class="mt-1 text-xs text-gray-500">
+						<p class="mt-1 text-gray-500 text-xs">
 							Files can only be moved to folders of the same category.
 						</p>
 					</div>
 				{/if}
 			</div>
-			<div class="mt-6 flex justify-end gap-3">
+			<div class="flex justify-end gap-3 mt-6">
 				<button
 					onclick={() => (showNewFolderModal = false)}
-					class="rounded-xl px-4 py-2 text-sm font-medium text-gray-400 hover:text-white"
+					class="px-4 py-2 rounded-xl font-medium text-gray-400 hover:text-white text-sm"
 					>Cancel</button
 				>
 				<button
 					onclick={createFolder}
-					class="bg-primary-container text-primary hover:bg-primary-container/80 rounded-xl px-4 py-2 text-sm font-medium"
+					class="bg-primary-container hover:bg-primary-container/80 px-4 py-2 rounded-xl font-medium text-primary text-sm"
 					>Create Folder</button
 				>
 			</div>
@@ -657,23 +660,23 @@
 {/if}
 
 {#if showRenameModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-		<div class="w-full max-w-md rounded-2xl border border-[#2A3241] bg-[#0B0E14] p-6 shadow-2xl">
-			<h3 class="mb-4 text-xl font-bold text-white">Rename Folder</h3>
+	<div class="z-50 fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-sm p-4">
+		<div class="bg-[#0B0E14] shadow-2xl p-6 border border-[#2A3241] rounded-2xl w-full max-w-md">
+			<h3 class="mb-4 font-bold text-white text-xl">Rename Folder</h3>
 			<input
 				type="text"
 				bind:value={renameFolderName}
-				class="focus:border-primary-container w-full rounded-xl border border-[#2A3241] bg-[#151921] px-4 py-2.5 text-white outline-none"
+				class="bg-[#151921] px-4 py-2.5 border border-[#2A3241] focus:border-primary-container rounded-xl outline-none w-full text-white"
 			/>
-			<div class="mt-6 flex justify-end gap-3">
+			<div class="flex justify-end gap-3 mt-6">
 				<button
 					onclick={() => (showRenameModal = false)}
-					class="rounded-xl px-4 py-2 text-sm font-medium text-gray-400 hover:text-white"
+					class="px-4 py-2 rounded-xl font-medium text-gray-400 hover:text-white text-sm"
 					>Cancel</button
 				>
 				<button
 					onclick={renameFolder}
-					class="bg-primary-container text-primary hover:bg-primary-container/80 rounded-xl px-4 py-2 text-sm font-medium"
+					class="bg-primary-container hover:bg-primary-container/80 px-4 py-2 rounded-xl font-medium text-primary text-sm"
 					>Save Changes</button
 				>
 			</div>
@@ -682,12 +685,12 @@
 {/if}
 
 {#if showMoveModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+	<div class="z-50 fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-sm p-4">
 		<div
-			class="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl border border-[#2A3241] bg-[#0B0E14] p-6 shadow-2xl"
+			class="flex flex-col bg-[#0B0E14] shadow-2xl p-6 border border-[#2A3241] rounded-2xl w-full max-w-md max-h-[80vh]"
 		>
-			<h3 class="mb-1 text-xl font-bold text-white">Move to...</h3>
-			<p class="mb-4 text-sm text-gray-400">
+			<h3 class="mb-1 font-bold text-white text-xl">Move to...</h3>
+			<p class="mb-4 text-gray-400 text-sm">
 				{#if isMultiMove}
 					Select destination folder
 				{:else}
@@ -696,12 +699,12 @@
 			</p>
 
 			<div
-				class="flex-1 space-y-2 overflow-y-auto rounded-xl border border-[#2A3241] bg-[#151921] p-2"
+				class="flex-1 space-y-2 bg-[#151921] p-2 border border-[#2A3241] rounded-xl overflow-y-auto"
 			>
 				<!-- Up to Parent Option -->
 				{#if modalCurrentFolderId}
 					<button
-						class="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors border border-transparent text-white hover:bg-[#1A202A]"
+						class="flex items-center gap-3 hover:bg-[#1A202A] p-3 border border-transparent rounded-lg w-full text-white text-left transition-colors"
 						onclick={() => {
 							modalCurrentFolderId = modalCurrentFolder?.parentId || null;
 							selectedDestinationId = modalCurrentFolderId;
@@ -728,7 +731,7 @@
 
 				<!-- Current Location Highlight (Optional, just visual) -->
 				{#if modalCurrentFolder}
-					<div class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+					<div class="px-3 py-2 font-semibold text-gray-500 text-xs uppercase tracking-wider">
 						Inside: {modalCurrentFolder.name}
 					</div>
 				{/if}
@@ -753,7 +756,7 @@
 							</button>
 							<!-- Navigate into folder button -->
 							<button
-								class="p-3 text-gray-400 hover:text-white rounded-lg hover:bg-[#1A202A]"
+								class="hover:bg-[#1A202A] p-3 rounded-lg text-gray-400 hover:text-white"
 								onclick={() => {
 									modalCurrentFolderId = folder.id;
 									selectedDestinationId = folder.id;
@@ -767,15 +770,15 @@
 				{/each}
 			</div>
 
-			<div class="mt-6 flex shrink-0 justify-end gap-3">
+			<div class="flex justify-end gap-3 mt-6 shrink-0">
 				<button
 					onclick={() => (showMoveModal = false)}
-					class="rounded-xl px-4 py-2 text-sm font-medium text-gray-400 hover:text-white"
+					class="px-4 py-2 rounded-xl font-medium text-gray-400 hover:text-white text-sm"
 					>Cancel</button
 				>
 				<button
 					onclick={moveItem}
-					class="bg-primary-container text-primary hover:bg-primary-container/80 rounded-xl px-4 py-2 text-sm font-medium"
+					class="bg-primary-container hover:bg-primary-container/80 px-4 py-2 rounded-xl font-medium text-primary text-sm"
 					>Move Here</button
 				>
 			</div>
@@ -784,21 +787,21 @@
 {/if}
 
 {#if isSelectionMode}
-	<div class="fixed bottom-10 left-[60%] -translate-x-1/2 z-[100] flex items-center gap-4 rounded-full bg-[#FF6B4A] border border-[#FF6B4A]/50 px-6 py-3 shadow-[0_0_40px_rgba(255,107,74,0.3)]">
-		<span class="text-black font-bold px-2">{selectedFiles.size + selectedFolders.size} selected</span>
+	<div class="bottom-10 left-[60%] z-[100] fixed flex items-center gap-4 bg-[#FF6B4A] shadow-[0_0_40px_rgba(255,107,74,0.3)] px-6 py-3 border border-[#FF6B4A]/50 rounded-full -translate-x-1/2">
+		<span class="px-2 font-bold text-black">{selectedFiles.size + selectedFolders.size} selected</span>
 		<button
-			class="flex items-center gap-2 rounded-xl bg-black/20 px-4 py-2 text-sm font-bold text-black hover:bg-black/30 transition-colors"
+			class="flex items-center gap-2 bg-black/20 hover:bg-black/30 px-4 py-2 rounded-xl font-bold text-black text-sm transition-colors"
 			onclick={() => openMoveModal('', 'file', data.currentFolder?.category || 'document', true)}
 		>
 			<CornerDownRight size={16} /> Move
 		</button>
 		<button
-			class="flex items-center gap-2 rounded-xl bg-black/20 px-4 py-2 text-sm font-bold text-black hover:bg-black/30 transition-colors"
+			class="flex items-center gap-2 bg-black/20 hover:bg-black/30 px-4 py-2 rounded-xl font-bold text-black text-sm transition-colors"
 			onclick={deleteSelected}
 		>
 			<Trash2 size={16} /> Delete
 		</button>
-		<div class="h-6 w-px bg-black/20"></div>
+		<div class="bg-black/20 w-px h-6"></div>
 		<button
 			class="p-2 text-black/70 hover:text-black transition-colors"
 			onclick={clearSelection}

@@ -107,6 +107,7 @@ export const files = sqliteTable('files', {
 	lyricsSource: text('lyrics_source'), // 'embedded' | 'lrclib' | 'manual' | 'not_found'
 
 	telegramMessageId: integer('telegram_message_id'),
+	telegramMessageIds: text('telegram_message_ids'), // JSON array of message_ids for chunked files: [123, 124]
 
 	createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
 	deletedAt: integer('deleted_at', { mode: 'timestamp' })
