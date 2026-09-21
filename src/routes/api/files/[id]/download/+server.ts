@@ -49,18 +49,20 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 			}
 		}
 
-		const downloadUrl = await getFileDownloadUrl(node.botToken, file.telegramFileId);
-
-		const requestHeaders = new Headers();
-		const range = request.headers.get('Range');
-		if (range) {
-			requestHeaders.set('Range', range);
+		// Parse Telegram file IDs
+		let tgIds: string[] = [];
+		if (file.telegramFileIds) {
+			try {
+				tgIds = JSON.parse(file.telegramFileIds);
+			} catch {
+				if (file.telegramFileId) tgIds = [file.telegramFileId];
+			}
+		} else if (file.telegramFileId) {
+			tgIds = [file.telegramFileId];
 		}
 
-		const response = await fetch(downloadUrl, { headers: requestHeaders });
-
-		if (!response.ok || !response.body) {
-			throw new Error('Failed to fetch file from Telegram');
+		if (tgIds.length === 0) {
+			throw error(404, 'No file content found');
 		}
 
 		const responseHeaders = new Headers();
@@ -74,27 +76,69 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 			`${isDownload ? 'attachment' : 'inline'}; filename*=UTF-8''${encodedFilename}`
 		);
 
-		responseHeaders.set('Accept-Ranges', 'bytes');
-		if (response.headers.has('Content-Length')) {
-			responseHeaders.set('Content-Length', response.headers.get('Content-Length')!);
+		if (tgIds.length === 1) {
+			// Single chunk: pass through Range requests
+			const downloadUrl = await getFileDownloadUrl(node.botToken, tgIds[0]);
+
+			const requestHeaders = new Headers();
+			const range = request.headers.get('Range');
+			if (range) {
+				requestHeaders.set('Range', range);
+			}
+
+			const response = await fetch(downloadUrl, { headers: requestHeaders });
+
+			if (!response.ok || !response.body) {
+				throw new Error('Failed to fetch file from Telegram');
+			}
+
+			responseHeaders.set('Accept-Ranges', 'bytes');
+			if (response.headers.has('Content-Length')) {
+				responseHeaders.set('Content-Length', response.headers.get('Content-Length')!);
+			} else {
+				responseHeaders.set('Content-Length', file.fileSize.toString());
+			}
+
+			if (response.headers.has('Content-Range')) {
+				responseHeaders.set('Content-Range', response.headers.get('Content-Range')!);
+			}
+
+			return new Response(response.body, {
+				status: response.status,
+				headers: responseHeaders
+			});
 		} else {
+			// Multiple chunks: return full concatenated stream, ignore Range requests (status 200)
 			responseHeaders.set('Content-Length', file.fileSize.toString());
+
+			const stream = new ReadableStream({
+				async start(controller) {
+					try {
+						for (const tgId of tgIds) {
+							const downloadUrl = await getFileDownloadUrl(node.botToken, tgId);
+							const response = await fetch(downloadUrl);
+							if (!response.ok || !response.body) {
+								throw new Error(`Failed to fetch chunk ${tgId}`);
+							}
+							const reader = response.body.getReader();
+							while (true) {
+								const { done, value } = await reader.read();
+								if (done) break;
+								controller.enqueue(value);
+							}
+						}
+						controller.close();
+					} catch (err) {
+						controller.error(err);
+					}
+				}
+			});
+
+			return new Response(stream, {
+				status: 200,
+				headers: responseHeaders
+			});
 		}
-
-		if (response.headers.has('Content-Range')) {
-			responseHeaders.set('Content-Range', response.headers.get('Content-Range')!);
-		}
-
-		let finalBody: any = response.body;
-
-		// Server no longer handles decryption for true zero-knowledge.
-		// If the file is encrypted, it returns the ciphertext directly to the client.
-		finalBody = response.body;
-
-		return new Response(finalBody, {
-			status: response.status,
-			headers: responseHeaders
-		});
 	} catch (err: any) {
 		console.error('Download error:', err);
 		throw error(500, err.message || 'Failed to download file');
