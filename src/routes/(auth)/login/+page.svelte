@@ -1,9 +1,7 @@
 <script lang="ts">
 	import { AtSign, Key, LogIn } from 'lucide-svelte';
 	import { enhance } from '$app/forms';
-	import { deriveKeysFromPassword, unwrapMasterKey } from '$lib/client/crypto';
-	import { saveVaultKeyToSession } from '$lib/client/encryptionStore';
-	import { goto } from '$app/navigation';
+			import { goto } from '$app/navigation';
 
 	let { form, data } = $props<{ form: any, data: any }>();
 	let isLoading = $state(false);
@@ -56,34 +54,10 @@
 				method="POST"
 				use:enhance={async (e) => {
 					isLoading = true;
-					try {
-						const { authHash: derivedAuthHash } = await deriveKeysFromPassword(
-							rawPassword,
-							username
-						);
-						e.formData.set('authHash', derivedAuthHash);
-					} catch (err) {
-						console.error('Crypto error', err);
-						e.cancel();
-						isLoading = false;
-						return;
-					}
-
+					
 					return async ({ result, update }) => {
 						if (result.type === 'success' && result.data?.success) {
-							// Unwrap DEK with KEK
-							try {
-								if (result.data && result.data.encryptedVaultKey) {
-									const actualUsername = result.data.actualUsername as string;
-									const { kek } = await deriveKeysFromPassword(rawPassword, actualUsername);
-									const dek = await unwrapMasterKey(result.data.encryptedVaultKey as string, kek);
-									saveVaultKeyToSession(dek);
-								}
-								goto((result.data?.redirectTo as string) || '/dashboard');
-							} catch (err) {
-								console.error('Failed to unwrap vault key', err);
-								form = { error: 'Login gagal karena kunci error. Harap ulangi kembali' };
-							}
+							goto((result.data?.redirectTo as string) || '/dashboard');
 						} else {
 							await update({ reset: false });
 						}

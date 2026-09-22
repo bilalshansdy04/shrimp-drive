@@ -1,8 +1,6 @@
 import { invalidateAll } from '$app/navigation';
 import { toast } from 'svelte-sonner';
 import { get } from 'svelte/store';
-import { encryptFileBlob, encryptMetadata } from '$lib/client/crypto';
-import { vaultKeyStore } from '$lib/client/encryptionStore';
 
 import * as musicMetadata from 'music-metadata-browser';
 
@@ -45,8 +43,6 @@ class UploadState {
 	isUploadingActive = $state(false);
 	isSendingActive = $state(false);
 
-	isEncryptionActive = $state(false);
-	encryptionMode = $state('flexible');
 
 	fileMetadata = new Map<string, { title?: string; artist?: string; album?: string; duration?: number; thumbnailUrl?: string }>();
 
@@ -68,10 +64,7 @@ class UploadState {
 
 	private activeXHR: XMLHttpRequest | null = null;
 
-	public setEncryptionSettings(mode: string, active: boolean | number) {
-		this.encryptionMode = mode;
-		this.isEncryptionActive = !!active;
-	}
+
 
 	public async addFiles(fileList: FileList, folderId: string | null = null) {
 		if (this.pendingItems.length === 0) {

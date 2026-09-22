@@ -1,3 +1,4 @@
+export const config = { runtime: 'edge' };
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { db } from '$lib/server/db';
@@ -5,7 +6,6 @@ import { files } from '$lib/server/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getFileDownloadUrl } from '$lib/server/telegram';
 import { createDecryptionStream } from '$lib/server/crypto';
-import { Readable } from 'node:stream';
 
 export const GET: RequestHandler = async ({ request, params, locals }) => {
 	if (!locals.user) {
@@ -107,19 +107,81 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 				status: response.status,
 				headers: responseHeaders
 			});
-		} else {
-			// Multiple chunks: return full concatenated stream, ignore Range requests (status 200)
-			responseHeaders.set('Content-Length', file.fileSize.toString());
+				} else {
+			// Multiple chunks: Support Range requests for smooth seeking and buffering
+			const CHUNK_SIZE = 3.5 * 1024 * 1024; // 3670016 bytes
+			const rangeHeader = request.headers.get('Range');
+			
+			let startByte = 0;
+			let endByte = file.fileSize - 1;
+			let isPartial = false;
+
+			if (rangeHeader) {
+				const parts = rangeHeader.replace(/bytes=/, '').split('-');
+				if (parts[0]) startByte = parseInt(parts[0], 10);
+				if (parts[1]) endByte = parseInt(parts[1], 10);
+				isPartial = true;
+			}
+
+			if (startByte >= file.fileSize) {
+				return new Response(null, {
+					status: 416,
+					headers: { 'Content-Range': `bytes */${file.fileSize}` }
+				});
+			}
+
+			responseHeaders.set('Accept-Ranges', 'bytes');
+			responseHeaders.set('Content-Length', (endByte - startByte + 1).toString());
+			if (isPartial) {
+				responseHeaders.set('Content-Range', `bytes ${startByte}-${endByte}/${file.fileSize}`);
+			}
+
+			const startChunkIdx = Math.floor(startByte / CHUNK_SIZE);
+			const endChunkIdx = Math.floor(endByte / CHUNK_SIZE);
 
 			const stream = new ReadableStream({
 				async start(controller) {
 					try {
-						for (const tgId of tgIds) {
+						// Pre-fetch the first chunk
+						let nextChunkPromise: Promise<Response | null> | null = null;
+						
+						const fetchChunk = async (i: number) => {
+							const tgId = tgIds[i];
+							if (!tgId) return null;
+
 							const downloadUrl = await getFileDownloadUrl(node.botToken, tgId);
-							const response = await fetch(downloadUrl);
-							if (!response.ok || !response.body) {
-								throw new Error(`Failed to fetch chunk ${tgId}`);
+							const tgHeaders = new Headers();
+							
+							let tgStart = 0;
+							let tgEnd = CHUNK_SIZE - 1;
+
+							if (i === startChunkIdx) {
+								tgStart = startByte % CHUNK_SIZE;
 							}
+							if (i === endChunkIdx) {
+								tgEnd = endByte % CHUNK_SIZE;
+							}
+							
+							if (tgStart > 0 || tgEnd < CHUNK_SIZE - 1) {
+								tgHeaders.set('Range', `bytes=${tgStart}-${tgEnd}`);
+							}
+
+							return fetch(downloadUrl, { headers: tgHeaders });
+						};
+
+						nextChunkPromise = fetchChunk(startChunkIdx);
+
+						for (let i = startChunkIdx; i <= endChunkIdx; i++) {
+							const response = await nextChunkPromise;
+							if (!response || !response.ok || !response.body) {
+								throw new Error(`Failed to fetch chunk ${i}`);
+							}
+							
+							// Start fetching the next chunk immediately while we stream this one
+							if (i + 1 <= endChunkIdx) {
+								nextChunkPromise = fetchChunk(i + 1);
+							}
+							
 							const reader = response.body.getReader();
 							while (true) {
 								const { done, value } = await reader.read();
@@ -135,7 +197,7 @@ export const GET: RequestHandler = async ({ request, params, locals }) => {
 			});
 
 			return new Response(stream, {
-				status: 200,
+				status: isPartial ? 206 : 200,
 				headers: responseHeaders
 			});
 		}

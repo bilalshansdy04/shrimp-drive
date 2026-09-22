@@ -34,7 +34,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Create FormData for Telegram
 		const tgFormData = new FormData();
 		tgFormData.append('chat_id', node.chatId);
-		tgFormData.append('document', chunk, `${fileName}.part${chunkIndex}`);
+		tgFormData.append('document', chunk, `${crypto.randomUUID()}.dat`);
 
 		// Upload to Telegram
 		const tgUrl = `https://api.telegram.org/bot${node.botToken}/sendDocument`;

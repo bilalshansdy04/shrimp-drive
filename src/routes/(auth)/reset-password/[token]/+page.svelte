@@ -1,18 +1,15 @@
 <script lang="ts">
 	import { Key, Shield } from 'lucide-svelte';
 	import { enhance } from '$app/forms';
-	import { deriveKeysFromPassword, recoverMasterKeyFromPhrase, wrapMasterKey } from '$lib/client/crypto';
+
 
 	let { form, data } = $props<{ form: any; data: any }>();
 	let isLoading = $state(false);
 
-	let recoveryPhrase = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
 	let localError = $state('');
 	
-	let authHash = $state('');
-	let encryptedVaultKey = $state('');
 	
 	// Ref to the form to submit it programmatically
 	let formElement: HTMLFormElement | null = $state(null);
@@ -34,40 +31,17 @@
 				return;
 			}
 		}
-		const wordCount = recoveryPhrase.trim().split(/\s+/).length;
-		if (wordCount !== 12 && wordCount !== 24) {
-			localError = 'Recovery phrase must be exactly 12 or 24 words.';
-			return;
-		}
-
 		isLoading = true;
-		try {
-			// 1. Recover DEK from 24 words
-			const dek = recoverMasterKeyFromPhrase(recoveryPhrase.trim());
-			
-			// 2. Derive KEK and AuthHash from new password
-			const keys = await deriveKeysFromPassword(newPassword, data.username);
-			authHash = keys.authHash;
-
-			// 3. Wrap the DEK with the new KEK
-			encryptedVaultKey = await wrapMasterKey(dek, keys.kek);
-
-			// 4. Submit form
-			setTimeout(() => {
-				if (formElement) formElement.submit();
-			}, 100);
-		} catch (err: any) {
-			console.error('Crypto error during recovery', err);
-			localError = 'Invalid recovery phrase. Check your 12 or 24 words.';
-			isLoading = false;
-		}
+		setTimeout(() => {
+			if (formElement) formElement.submit();
+		}, 100);
 	}
 </script>
 
 <div class="flex min-h-screen items-center justify-center bg-[#0B0E14] p-6 text-white">
 	<div class="w-full max-w-[400px] rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-lg">
-		<h1 class="mb-2 text-2xl font-bold">Reset Password & Vault</h1>
-		<p class="mb-6 text-sm text-gray-400">Enter your Recovery Phrase (12 or 24 words) and a new password.</p>
+		<h1 class="mb-2 text-2xl font-bold">Reset Password</h1>
+		<p class="mb-6 text-sm text-gray-400">Enter a new password.</p>
 
 		{#if form?.success}
 			<div class="mb-6 rounded-lg bg-[#00390f] p-4 text-[#73f382]">
@@ -105,11 +79,6 @@
 				bind:this={formElement}
 				method="POST"
 				use:enhance={({ cancel }) => {
-					if (authHash === '') {
-						cancel();
-						handleFormSubmit();
-						return;
-					}
 					isLoading = true;
 					return async ({ update }) => {
 						await update();
@@ -117,30 +86,11 @@
 					};
 				}}
 			>
-				<input type="hidden" name="authHash" value={authHash} />
-				<input type="hidden" name="encryptedVaultKey" value={encryptedVaultKey} />
+				
+				
 
 				<div class="mb-6 space-y-4">
-					<div class="group relative">
-						<label class="mb-1 block text-xs font-medium text-gray-400" for="phrase"
-							>12 or 24-Word Recovery Phrase</label
-						>
-						<div class="relative flex items-center">
-							<Shield
-								class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]"
-								size={20}
-							/>
-							<input
-								bind:value={recoveryPhrase}
-								id="phrase"
-								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-2 pr-3 pl-10 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
-								placeholder="word1 word2 word3..."
-								type="text"
-								autocomplete="off"
-								required
-							/>
-						</div>
-					</div>
+
 					<div class="group relative">
 						<label class="mb-1 block text-xs font-medium text-gray-400" for="password"
 							>{data.hasGoogleId ? 'New Vault PIN' : 'New Password'}</label
@@ -190,7 +140,7 @@
 					disabled={isLoading}
 					class="flex w-full items-center justify-center gap-2 rounded-lg bg-[#FF6B4A] px-6 py-3 text-sm font-bold text-[#0B0E14] transition-colors hover:bg-[#FF8264] disabled:opacity-50"
 				>
-					{isLoading ? 'Resetting...' : data.hasGoogleId ? 'Restore Vault & Reset PIN' : 'Restore Vault & Reset Password'}
+					{isLoading ? 'Resetting...' : data.hasGoogleId ? 'Reset PIN' : 'Reset Password'}
 				</button>
 			</form>
 		{/if}

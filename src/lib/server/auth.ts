@@ -40,11 +40,17 @@ export async function createSession(token: string, userId: string) {
 
 export async function validateSessionToken(token: string) {
 	const sessionId = token;
-	const result = await db
-		.select({ user: users, session: sessions })
-		.from(sessions)
-		.innerJoin(users, eq(sessions.userId, users.id))
-		.where(eq(sessions.id, sessionId));
+	let result;
+	try {
+		result = await db
+			.select({ user: users, session: sessions })
+			.from(sessions)
+			.innerJoin(users, eq(sessions.userId, users.id))
+			.where(eq(sessions.id, sessionId));
+	} catch (e: any) {
+		console.error('INNER ERROR:', e, e?.cause, e?.message, JSON.stringify(e));
+		throw e;
+	}
 
 	if (result.length === 0) {
 		return { session: null, user: null };

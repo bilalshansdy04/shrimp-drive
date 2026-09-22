@@ -11,41 +11,32 @@
 		Server,
 		Lock
 	} from 'lucide-svelte';
-	import { deriveKeysFromPassword, generateMasterVaultKey, wrapMasterKey } from '$lib/client/crypto';
-	import { saveVaultKeyToSession } from '$lib/client/encryptionStore';
-
+		
 	let { data } = $props<{ data: { hasPassword: boolean; hasEncryptedVaultKey: boolean; email: string; username: string } }>();
 
 	// Flow:
 	// 1: Choose Backend (Global vs Custom)
-	// If Global: 1 -> 5 (PIN if needed) -> 4 (Ready)
-	// If Custom: 1 -> 2 (Bot) -> 3 (Channel) -> 5 (PIN if needed) -> 4 (Ready)
+	// If Global: 1 -> 4 (Ready)
+	// If Custom: 1 -> 2 (Bot) -> 3 (Channel) -> 4 (Ready)
 	let currentStep = $state(1);
 	let backendChoice = $state<'global' | 'custom'>('global');
 
 	let inviteCode = $state('');
 	let inviteType = $state(''); // optional
 	let inviteCodeError = $state('');
-	let enableEncryption = $state(true);
 
 	let botToken = $state('');
 	let botVerified = $state(false);
 	let chatId = $state('');
 	let pingSuccess = $state(false);
 
-	let vaultPin = $state('');
-	let confirmPin = $state('');
 	
 	let isLoading = $state(false);
 	let errorMsg = $state('');
 
 	function prevStep() {
-		if (currentStep === 5) {
+		if (currentStep === 4) {
 			if (backendChoice === 'global') currentStep = 1;
-			else currentStep = 3;
-		} else if (currentStep === 4) {
-			if (!data.hasPassword) currentStep = 5;
-			else if (backendChoice === 'global') currentStep = 1;
 			else currentStep = 3;
 		} else {
 			if (currentStep > 1) {
@@ -73,7 +64,7 @@
 						const rData = await res.json();
 						if (rData.success) {
 							inviteType = rData.type;
-							currentStep = !data.hasPassword ? 5 : 4;
+							currentStep = 4;
 						} else {
 							inviteCodeError = rData.error;
 						}
@@ -82,7 +73,7 @@
 					}
 					isLoading = false;
 				} else {
-					currentStep = !data.hasPassword ? 5 : 4;
+					currentStep = 4;
 				}
 			} else {
 				currentStep = 2; // Bot Setup
@@ -90,20 +81,8 @@
 		} else if (currentStep === 2 && backendChoice === 'custom') {
 			currentStep = 3; // Channel
 		} else if (currentStep === 3 && backendChoice === 'custom') {
-			currentStep = !data.hasPassword ? 5 : 4;
-		} else if (currentStep === 5) {
-			// PIN Setup validation
-			if (vaultPin.length < 6) {
-				errorMsg = 'PIN must be at least 6 characters.';
-				return;
-			}
-			if (vaultPin !== confirmPin) {
-				errorMsg = 'PINs do not match.';
-				return;
-			}
-			errorMsg = '';
 			currentStep = 4;
-		}
+
 	}
 
 	async function verifyBot() {
@@ -159,25 +138,6 @@
 		isLoading = true;
 		errorMsg = '';
 		try {
-			let authHash = undefined;
-			let encryptedVaultKey = undefined;
-
-			// If they don't have a password, they must have set a PIN in step 5
-			if (!data.hasPassword && vaultPin.length >= 6) {
-				// 1. Derive KEK and authHash
-				const keys = await deriveKeysFromPassword(vaultPin, data.username);
-				authHash = keys.authHash;
-				
-				// 2. Generate Master Key (DEK)
-				const dek = generateMasterVaultKey();
-				
-				// 3. Wrap DEK with KEK
-				encryptedVaultKey = await wrapMasterKey(dek, keys.kek);
-				
-				// Save DEK to session so it's ready to use in dashboard
-				saveVaultKeyToSession(dek);
-			}
-
 			const res = await fetch('/onboarding', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -186,9 +146,6 @@
 					code: backendChoice === 'global' ? inviteCode : undefined,
 					botToken: backendChoice === 'custom' ? botToken : undefined,
 					chatId: backendChoice === 'custom' ? chatId : undefined,
-					enableEncryption,
-					authHash,
-					encryptedVaultKey
 				})
 			});
 			const rData = await res.json();
@@ -319,29 +276,7 @@
 							</div>
 						</button>
 
-						<!-- Encryption Toggle for All -->
-						<div class="mt-6 pt-4 border-[#2A3241] border-t">
-							<label class="flex items-start gap-3 cursor-pointer">
-								<div class="relative flex items-center pt-1">
-									<input type="checkbox" bind:checked={enableEncryption} class="sr-only peer" />
-									<div
-										class="peer after:top-[6px] after:left-[2px] after:absolute bg-[#2A3241] after:bg-white peer-checked:bg-[#FF6B4A] after:border after:border-gray-300 peer-checked:after:border-white rounded-full after:rounded-full peer-focus:outline-none w-10 after:w-4 h-5 after:h-4 after:content-[''] after:transition-all peer-checked:after:translate-x-full"
-									></div>
-								</div>
-								<div>
-									<div class="font-bold text-white text-sm">
-										Enable Client-Side Encryption (Flexible)
-									</div>
-									<div class="mt-1 text-gray-400 text-xs">
-										Encrypt your files before uploading. You can disable this later in settings.
-										<br /><span class="font-medium text-[#FF6B4A]"
-											>WARNING: If you lose your recovery key, your encrypted files cannot be
-											recovered.</span
-										>
-									</div>
-								</div>
-							</label>
-						</div>
+
 					</div>
 
 					<div class="flex justify-end mt-8 pt-4 border-[#2A3241] border-t">
@@ -524,74 +459,6 @@
 							class="flex items-center gap-2 bg-[#FF6B4A] hover:bg-[#FF8264] disabled:opacity-50 px-6 py-2 rounded-lg font-bold text-[#0B0E14] text-sm transition-colors"
 							onclick={nextStep}
 							disabled={!pingSuccess}
-						>
-							Next <ArrowRight size={18} />
-						</button>
-					</div>
-				</section>
-			{/if}
-
-			<!-- Step 5: Setup Vault PIN (For Google Users) -->
-			{#if currentStep === 5}
-				<section class="animate-[fadeIn_0.3s_ease]">
-					<h2 class="mb-2 font-bold text-white text-2xl">Secure Your Vault</h2>
-					<p class="mb-6 text-gray-400 text-sm">
-						Because you registered using a third-party provider, you must create a 6-digit PIN to secure your encryption key. 
-						<br /><span class="text-[#FF6B4A]">Do not forget this PIN, or you will lose access to your files.</span>
-					</p>
-
-					<div class="mb-4">
-						<label class="block mb-1 font-medium text-gray-400 text-xs" for="vaultPin"
-							>Enter 6-Digit Vault PIN</label
-						>
-						<div class="group relative flex items-center">
-							<Lock
-								class="left-3 absolute text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors"
-								size={20}
-							/>
-							<input
-								bind:value={vaultPin}
-								id="vaultPin"
-								class="bg-[#0B0E14] py-2 pr-3 pl-10 border border-[#2A3241] focus:border-[#FF6B4A] rounded-lg focus:outline-none w-full text-white text-sm transition-colors"
-								placeholder="e.g. 123456"
-								type="password"
-								inputmode="numeric"
-								minlength="6"
-							/>
-						</div>
-					</div>
-
-					<div class="mb-4">
-						<label class="block mb-1 font-medium text-gray-400 text-xs" for="confirmPin"
-							>Confirm Vault PIN</label
-						>
-						<div class="group relative flex items-center">
-							<Lock
-								class="left-3 absolute text-[#2A3241] group-focus-within:text-[#FF6B4A] transition-colors"
-								size={20}
-							/>
-							<input
-								bind:value={confirmPin}
-								id="confirmPin"
-								class="bg-[#0B0E14] py-2 pr-3 pl-10 border border-[#2A3241] focus:border-[#FF6B4A] rounded-lg focus:outline-none w-full text-white text-sm transition-colors"
-								placeholder="Re-enter PIN"
-								type="password"
-								inputmode="numeric"
-								minlength="6"
-							/>
-						</div>
-					</div>
-
-					<div class="flex justify-between mt-8 pt-4 border-[#2A3241] border-t">
-						<button
-							class="flex items-center gap-2 bg-transparent hover:bg-[#1E2430] px-4 py-2 border border-[#2A3241] rounded-lg text-white text-sm transition-colors"
-							onclick={prevStep}
-						>
-							<ArrowLeft size={18} /> Back
-						</button>
-						<button
-							class="flex items-center gap-2 bg-[#FF6B4A] hover:bg-[#FF8264] px-6 py-2 rounded-lg font-bold text-[#0B0E14] text-sm transition-colors"
-							onclick={nextStep}
 						>
 							Next <ArrowRight size={18} />
 						</button>

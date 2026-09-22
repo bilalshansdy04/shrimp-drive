@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { AtSign, Key, UserPlus, Mail, Check, X, Eye, EyeOff } from 'lucide-svelte';
 	import { enhance } from '$app/forms';
-	import {
-		generateMasterVaultKey,
-		generateRecoveryPhrase,
-		deriveKeysFromPassword,
-		wrapMasterKey
-	} from '$lib/client/crypto';
+
 
 	let { form } = $props<{ form: any }>();
 	let isLoading = $state(false);
@@ -16,29 +11,13 @@
 
 	let isUsernameAvailable = $state<boolean | null>(null);
 	let isCheckingUsername = $state(false);
-
-	let showRecoveryModal = $state(false);
-	let recoveryPhrase = $state('');
-	let hasDownloadedPhrase = $state(false);
-
-	let authHash = $state('');
-	let encryptedVaultKey = $state('');
 	let formElement = $state<HTMLFormElement | null>(null);
 
 	let confirmPassword = $state('');
 	let showPassword = $state(false);
 	let showConfirmPassword = $state(false);
 
-	function downloadPhrase() {
-		const blob = new Blob([recoveryPhrase], { type: 'text/plain' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = 'ShrimpDrive_Recovery_Phrase.txt';
-		a.click();
-		URL.revokeObjectURL(url);
-		hasDownloadedPhrase = true;
-	}
+
 
 	async function checkUsernameManual() {
 		if (username.trim() === '') {
@@ -69,45 +48,12 @@
 			return;
 		}
 
-		isLoading = true;
-
-		try {
-			// 1. Generate DEK
-			const dek = generateMasterVaultKey();
-
-			// 2. Derive KEK and Auth Hash from Password
-			const { kek, authHash: derivedAuthHash } = await deriveKeysFromPassword(
-				rawPassword,
-				username
-			);
-
-			// 3. Wrap DEK with KEK
-			const wrappedKey = await wrapMasterKey(dek, kek);
-
-			// 4. Generate Recovery Phrase
-			const phrase = generateRecoveryPhrase(dek);
-
-			// Set state
-			authHash = derivedAuthHash;
-			encryptedVaultKey = wrappedKey;
-			recoveryPhrase = phrase;
-
-			isLoading = false;
-			showRecoveryModal = true;
-		} catch (err: any) {
-			console.error('Crypto error:', err);
-			alert('Failed to generate secure keys. Please try again.');
-			isLoading = false;
-		}
-	}
-
-	function confirmRecoverySaved() {
-		showRecoveryModal = false;
-		// After modal is closed, programmatically submit the form
 		if (formElement) {
 			formElement.submit();
 		}
 	}
+
+
 </script>
 
 <div
@@ -154,11 +100,6 @@
 					bind:this={formElement}
 					method="POST"
 					use:enhance={({ cancel }) => {
-						if (!showRecoveryModal && authHash === '') {
-							cancel();
-							handleFormSubmit();
-							return;
-						}
 						isLoading = true;
 						return async ({ update }) => {
 							await update();
@@ -166,8 +107,8 @@
 						};
 					}}
 				>
-					<input type="hidden" name="authHash" value={authHash} />
-					<input type="hidden" name="encryptedVaultKey" value={encryptedVaultKey} />
+					
+					
 
 					<div class="mb-6 space-y-4">
 						<div class="group relative">
@@ -351,52 +292,6 @@
 					</a>
 				</form>
 
-				{#if showRecoveryModal}
-					<div
-						class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"
-					>
-						<div
-							class="w-full max-w-md rounded-2xl border border-[#2A3241] bg-[#0B0E14] p-6 shadow-2xl"
-						>
-							<h2 class="mb-2 text-xl font-bold text-white">Your Recovery Phrase</h2>
-							<p class="mb-4 text-sm font-medium text-red-400">
-								WARNING: This is the ONLY time you will see this. Write it down offline. If you lose
-								your password and this phrase, your files are gone forever!
-							</p>
-
-							<div
-								class="mb-6 grid grid-cols-3 gap-2 rounded-lg bg-[#151921] p-4 font-mono text-xs"
-							>
-								{#each recoveryPhrase.split(' ') as word, i}
-									<div class="flex items-center gap-2">
-										<span class="text-gray-500">{i + 1}.</span>
-										<span class="font-bold text-white">{word}</span>
-									</div>
-								{/each}
-							</div>
-
-							<div class="flex flex-col gap-3">
-								{#if hasDownloadedPhrase}
-									<button
-										onclick={downloadPhrase}
-										class="w-full rounded-lg border border-[#FF6B4A] py-2 text-sm font-bold text-[#FF6B4A] transition-colors hover:bg-[#FF6B4A]/10"
-									>
-										Download Again
-									</button>
-									<button
-										onclick={confirmRecoverySaved}
-										class="w-full rounded-lg bg-[#FF6B4A] py-3 text-sm font-bold text-black transition-colors hover:bg-[#ff8264]"
-									>
-										I have safely stored this phrase
-									</button>
-								{:else}
-									<button
-										onclick={downloadPhrase}
-										class="w-full rounded-lg bg-[#FF6B4A] py-3 text-sm font-bold text-black transition-colors hover:bg-[#ff8264]"
-									>
-										Download Recovery Phrase (.txt)
-									</button>
-								{/if}
 							</div>
 						</div>
 					</div>

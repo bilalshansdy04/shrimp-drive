@@ -19,9 +19,9 @@ export const actions: Actions = {
 	default: async ({ request, cookies }) => {
 		const data = await request.formData();
 		const username = data.get('username') as string;
-		const authHash = data.get('authHash') as string;
+		const password = data.get('password') as string;
 
-		if (!username || !authHash) {
+		if (!username || !password) {
 			return fail(400, { error: 'Username and password are required.' });
 		}
 
@@ -47,7 +47,7 @@ export const actions: Actions = {
 			return fail(403, { error: 'Your account has been suspended or deactivated.' });
 		}
 
-		const isPasswordValid = await comparePassword(authHash, user.passwordHash);
+		const isPasswordValid = await comparePassword(password, user.passwordHash);
 
 		if (!isPasswordValid) {
 			return fail(401, { error: 'Invalid credentials.' });
@@ -66,7 +66,6 @@ export const actions: Actions = {
 		// Instead of redirecting immediately, return success so the client can unwrap the DEK first.
 		return {
 			success: true,
-			encryptedVaultKey: user.encryptedVaultKey,
 			actualUsername: user.username,
 			redirectTo: '/dashboard'
 		};

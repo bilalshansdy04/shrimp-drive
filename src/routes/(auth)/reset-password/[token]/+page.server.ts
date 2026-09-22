@@ -42,11 +42,11 @@ export const actions: Actions = {
 	default: async ({ request, params }) => {
 		const token = params.token;
 		const data = await request.formData();
-		const authHash = data.get('authHash') as string;
-		const encryptedVaultKey = data.get('encryptedVaultKey') as string;
+		const password = data.get('password') as string;
+		
 
-		if (!authHash || !encryptedVaultKey) {
-			return fail(400, { error: 'Cryptographic data missing.' });
+		if (!password) {
+			return fail(400, { error: 'Password missing.' });
 		}
 
 		const tokenResult = await db
@@ -65,17 +65,17 @@ export const actions: Actions = {
 			return fail(400, { error: 'Password reset link has expired.' });
 		}
 
-		const passwordHash = await hashPassword(authHash);
+		const passwordHash = await hashPassword(password);
 
 		// Update user password and vault key
 		await db.update(users).set({ 
 			passwordHash,
-			encryptedVaultKey
+			encryptedVaultKey: null
 		}).where(eq(users.id, resetToken.userId));
 
 		// Delete used token
 		await db.delete(passwordResetTokens).where(eq(passwordResetTokens.id, resetToken.id));
 
-		return { success: 'Your password and encryption key have been successfully reset! You can now login.' };
+		return { success: 'Your password has been successfully reset! You can now login.' };
 	}
 };

@@ -13,7 +13,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const data = await request.json();
-		const { backendChoice, code, botToken, chatId, enableEncryption, authHash, encryptedVaultKey } = data;
+		const { backendChoice, code, botToken, chatId } = data;
 
 		let finalNodeId: string | null = null;
 		let finalEncryptionMode = 'flexible';
@@ -100,14 +100,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const updateData: any = {
 			telegramNodeId: finalNodeId,
 			encryptionMode: finalEncryptionMode,
-			isEncryptionActive: enableEncryption === true
+			isEncryptionActive: false
 		};
-
-		if (authHash && encryptedVaultKey) {
-			const { hashPassword } = await import('$lib/server/hash');
-			updateData.passwordHash = await hashPassword(authHash);
-			updateData.encryptedVaultKey = encryptedVaultKey;
-		}
 
 		await db
 			.update(users)

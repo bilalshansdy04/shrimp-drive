@@ -53,7 +53,16 @@ export async function uploadFileToTelegram(
 	}
 }
 
+
+const fileUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
 export async function getFileDownloadUrl(botToken: string, fileId: string) {
+	const now = Date.now();
+	const cached = fileUrlCache.get(fileId);
+	if (cached && cached.expiresAt > now) {
+		return cached.url;
+	}
+
 	const url = `https://api.telegram.org/bot${botToken}/getFile?file_id=${fileId}`;
 
 	const res = await fetch(url);
@@ -64,8 +73,14 @@ export async function getFileDownloadUrl(botToken: string, fileId: string) {
 	}
 
 	const filePath = data.result.file_path;
-	return `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+	const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+	
+	// Cache for 45 minutes (Telegram URLs are valid for 1 hour)
+	fileUrlCache.set(fileId, { url: downloadUrl, expiresAt: now + 45 * 60 * 1000 });
+	
+	return downloadUrl;
 }
+
 
 export async function deleteTelegramMessage(botToken: string, chatId: string, messageId: number) {
 	const url = `https://api.telegram.org/bot${botToken}/deleteMessage`;

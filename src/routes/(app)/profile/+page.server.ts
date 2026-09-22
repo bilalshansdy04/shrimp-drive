@@ -31,31 +31,4 @@ export const actions: Actions = {
 		return { success: 'Profile updated successfully.' };
 	},
 
-
-
-	toggleFlexibleEncryption: async ({ request, locals }) => {
-		if (!locals.user) return fail(401, { error: 'Unauthorized' });
-
-		if (locals.user.encryptionMode !== 'flexible') {
-			return fail(400, { error: 'You are not in flexible mode.' });
-		}
-
-		const data = await request.formData();
-		const action = data.get('action') as string;
-
-		const isActive = action === 'on';
-
-		await db
-			.update(users)
-			.set({
-				isEncryptionActive: isActive
-			})
-			.where(eq(users.id, locals.user.id));
-
-		return {
-			success: isActive
-				? 'Encryption enabled for future uploads.'
-				: 'Encryption disabled for future uploads.'
-		};
-	}
 };

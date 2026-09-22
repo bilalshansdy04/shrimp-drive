@@ -16,8 +16,8 @@
 		Lock,
 		Loader2
 	} from 'lucide-svelte';
-	import { deriveKeysFromPassword, unwrapMasterKey } from '$lib/client/crypto';
-	import { vaultKeyStore, saveVaultKeyToSession } from '$lib/client/encryptionStore';
+	
+	
 	import { get } from 'svelte/store';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -86,11 +86,7 @@
 		}
 	});
 
-	$effect(() => {
-		if (data.user) {
-			uploadState.setEncryptionSettings(data.user.encryptionMode, data.user.isEncryptionActive);
-		}
-	});
+
 
 	let storagePercentage = $derived(
 		data.user
@@ -100,58 +96,7 @@
 			: 0
 	);
 
-	let isVaultLocked = $state(false);
-	let unlockPin = $state('');
-	let isUnlocking = $state(false);
-	let unlockError = $state('');
-	let failedAttempts = $state(0);
 
-	$effect(() => {
-		if (data.user?.encryptedVaultKey) {
-			const dek = get(vaultKeyStore);
-			if (!dek) {
-				isVaultLocked = true;
-			} else {
-				isVaultLocked = false;
-			}
-		}
-	});
-
-	async function unlockVault(e: Event) {
-		e.preventDefault();
-		if (!unlockPin) return;
-
-		isUnlocking = true;
-		unlockError = '';
-
-		try {
-			const keys = await deriveKeysFromPassword(unlockPin, data.user.username);
-			const masterKey = await unwrapMasterKey(data.user.encryptedVaultKey, keys.kek);
-			saveVaultKeyToSession(masterKey);
-			isVaultLocked = false;
-			unlockPin = '';
-			failedAttempts = 0;
-		} catch (err) {
-			console.error(err);
-			failedAttempts++;
-			const errorMessages = [
-				'Incorrect Vault PIN or Password.',
-				'Invalid credentials. Please try again.',
-				'Decryption failed. Wrong PIN/Password.',
-				'Access denied. Verify your password.',
-				'Uh oh! That PIN or Password was incorrect.'
-			];
-			unlockError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
-
-			if (failedAttempts >= 3) {
-				toast.error(
-					'Gagal 3 kali? Jika Anda baru saja mengubah password/PIN, coba refresh halaman ini dan masukkan password baru Anda.',
-					{ duration: 6000 }
-				);
-			}
-		}
-		isUnlocking = false;
-	}
 
 	function handleUpload(e: Event) {
 		const target = e.target as HTMLInputElement;
@@ -165,67 +110,7 @@
 
 <Toaster theme="dark" position="top-right" offset="80px" />
 
-<!-- Vault Locked Modal -->
-{#if isVaultLocked}
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="fixed inset-0 z-[100] flex items-center justify-center bg-[#0B0E14]/90 p-4 backdrop-blur-md"
-	>
-		<div class="w-full max-w-sm rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-2xl">
-			<div class="mb-4 flex flex-col items-center text-center">
-				<div class="mb-3 rounded-full bg-[#FF6B4A]/10 p-3 text-[#FF6B4A]">
-					<Lock size={32} />
-				</div>
-				<h2 class="text-xl font-bold text-white">Your Vault is Locked</h2>
-				<p class="mt-2 text-sm text-gray-400">
-					Please enter your {data.user?.googleId ? 'Vault PIN' : 'Account Password'} to unlock your files
-					for this session.
-				</p>
-			</div>
 
-			<form onsubmit={unlockVault} class="mt-6">
-				<div class="group relative mb-4 flex items-center">
-					<Lock
-						class="absolute left-3 text-[#2A3241] transition-colors group-focus-within:text-[#FF6B4A]"
-						size={20}
-					/>
-					<input
-						bind:value={unlockPin}
-						type="password"
-						placeholder={data.user?.googleId ? 'Enter Vault PIN' : 'Enter Password'}
-						required
-						class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] py-3 pr-4 pl-10 text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
-					/>
-				</div>
-
-				{#if unlockError}
-					<p class="mb-4 text-center text-sm font-medium text-red-400">{unlockError}</p>
-				{/if}
-
-				<button
-					type="submit"
-					disabled={isUnlocking}
-					class="w-full rounded-lg bg-[#FF6B4A] px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-[#ff8264] disabled:opacity-50"
-				>
-					{isUnlocking ? 'Unlocking...' : 'Unlock Vault'}
-				</button>
-
-				<div class="mt-4 text-center">
-					<a
-						href="/forgot-password"
-						class="text-xs text-gray-400 hover:text-white hover:underline"
-						onclick={() => {
-							isVaultLocked = false;
-						}}
-					>
-						Forgot your PIN/Password?
-					</a>
-				</div>
-			</form>
-		</div>
-	</div>
-{/if}
 
 <div class="relative flex h-screen w-full overflow-hidden bg-[#0B0E14] text-white">
 	<!-- Mobile Menu Overlay -->

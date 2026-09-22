@@ -11,9 +11,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	try {
-		const { currentAuthHash, newAuthHash, newEncryptedVaultKey } = await request.json();
+		const { currentPassword, newPassword } = await request.json();
 
-		if (!newAuthHash || !newEncryptedVaultKey) {
+		if (!newPassword) {
 			return json({ success: false, error: 'Missing required fields' }, { status: 400 });
 		}
 
@@ -23,20 +23,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const user = userResult[0];
 
 		if (user.passwordHash) {
-			if (!currentAuthHash) {
+			if (!currentPassword) {
 				return json({ success: false, error: 'Current password is required.' }, { status: 400 });
 			}
-			const isPasswordValid = await comparePassword(currentAuthHash, user.passwordHash);
+			const isPasswordValid = await comparePassword(currentPassword, user.passwordHash);
 			if (!isPasswordValid) {
 				return json({ success: false, error: 'Incorrect current password.' }, { status: 400 });
 			}
 		}
 
-		const passwordHash = await hashPassword(newAuthHash);
+		const passwordHash = await hashPassword(newPassword);
 		
 		await db
 			.update(users)
-			.set({ passwordHash, encryptedVaultKey: newEncryptedVaultKey })
+			.set({ passwordHash,  })
 			.where(eq(users.id, locals.user.id));
 
 		return json({ success: true });

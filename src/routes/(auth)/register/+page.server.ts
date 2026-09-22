@@ -18,13 +18,13 @@ export const actions: Actions = {
 		const username = data.get('username') as string;
 		const email = data.get('email') as string;
 		const displayName = data.get('displayName') as string;
-		const authHash = data.get('authHash') as string;
-		const encryptedVaultKey = data.get('encryptedVaultKey') as string;
+		const password = data.get('password') as string;
+		
 		
 		const botToken = data.get('botToken') as string | null;
 		const chatId = data.get('chatId') as string | null;
 
-		if (!username || !email || !displayName || !authHash || !encryptedVaultKey) {
+		if (!username || !email || !displayName || !password) {
 			return fail(400, { error: 'All fields are required.' });
 		}
 
@@ -38,8 +38,8 @@ export const actions: Actions = {
 			return fail(400, { error: 'Username or Email already in use.' });
 		}
 
-		// Hash the client's authHash one more time using bcrypt
-		const passwordHash = await hashPassword(authHash);
+		// Hash the password
+		const passwordHash = await hashPassword(password);
 		const userId = crypto.randomUUID();
 
 		try {
@@ -49,7 +49,7 @@ export const actions: Actions = {
 				email,
 				displayName,
 				passwordHash,
-				encryptedVaultKey,
+				encryptedVaultKey: null,
 				emailVerified: 0
 			});
 
