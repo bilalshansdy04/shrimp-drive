@@ -15,7 +15,9 @@
 		Edit2,
 		Home,
 		ChevronRight,
-		X
+		X,
+		CheckSquare,
+		Square
 	} from 'lucide-svelte';
 	import { formatBytes, formatDate } from '$lib/utils';
 	import type { PageData } from './$types';
@@ -84,6 +86,21 @@
 		selectedFiles = new Set();
 		selectedFolders = new Set();
 		updateSelectionMode();
+	}
+
+	function toggleSelectAll() {
+		const totalItems = data.childFolders.length + data.recentFiles.length;
+		if (totalItems === 0) return;
+		
+		if (selectedFolders.size + selectedFiles.size === totalItems) {
+			clearSelection();
+		} else {
+			data.childFolders.forEach(f => selectedFolders.add(f.id));
+			data.recentFiles.forEach(f => selectedFiles.add(f.id));
+			selectedFolders = new Set(selectedFolders);
+			selectedFiles = new Set(selectedFiles);
+			updateSelectionMode();
+		}
 	}
 
 	let percentage = $derived(
@@ -336,6 +353,18 @@
 		</div>
 
 		<div class="flex items-center gap-3 w-full sm:w-auto">
+			{#if data.childFolders.length > 0 || data.recentFiles.length > 0}
+				<button
+					onclick={toggleSelectAll}
+					class="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-[#151921] hover:bg-[#1A202A] px-4 py-2.5 border border-[#2A3241] hover:border-primary-container rounded-xl font-medium text-white text-sm transition-colors {isSelectionMode && selectedFolders.size + selectedFiles.size === data.childFolders.length + data.recentFiles.length ? 'border-primary-container text-primary' : ''}"
+				>
+					{#if isSelectionMode && selectedFolders.size + selectedFiles.size === data.childFolders.length + data.recentFiles.length}
+						<CheckSquare size={18} /> Deselect All
+					{:else}
+						<Square size={18} /> Select All
+					{/if}
+				</button>
+			{/if}
 			{#if currentFolderId}
 				<button
 					onclick={() => (showNewFolderModal = true)}
@@ -344,12 +373,6 @@
 					<FolderPlus size={18} /> New Folder
 				</button>
 			{/if}
-			<!-- <button
-				onclick={triggerUploadClick}
-				class="flex flex-1 sm:flex-none justify-center items-center gap-2 bg-primary-container hover:bg-primary-container/80 px-4 py-2.5 rounded-xl font-medium text-primary text-sm transition-colors"
-			>
-				<UploadCloud size={18} /> Upload Files
-			</button> -->
 		</div>
 	</div>
 
