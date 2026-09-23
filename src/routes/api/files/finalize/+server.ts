@@ -120,8 +120,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			if (!metadataThumbnailUrl && parsed.common?.picture && parsed.common.picture.length > 0) {
 				const pic = parsed.common.picture[0];
 				const picBlob = new Blob([pic.data as unknown as BlobPart], { type: pic.format || 'image/jpeg' });
-				const picResult = await uploadFileToTelegram(node.botToken, node.chatId, picBlob, 'cover.jpg');
+				const picResult = await uploadFileToTelegram(node.botToken, node.chatId, picBlob, `${crypto.randomUUID()}.dat`);
 				metadataThumbnailUrl = `/api/files/thumbnail/${picResult.telegramFileId}`;
+				if (Array.isArray(messageIds)) {
+					messageIds.push(picResult.telegramMessageId);
+				}
 			}
 		} catch (e) {
 			console.error('Failed to extract audio metadata in finalize:', e);

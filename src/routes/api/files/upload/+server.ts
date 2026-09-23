@@ -140,9 +140,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 						node.botToken,
 						node.chatId,
 						audioThumbnail,
-						'cover.jpg'
+						`${crypto.randomUUID()}.dat`
 					);
 					metadata.thumbnailUrl = `/api/files/thumbnail/${picTgResult.telegramFileId}`;
+					metadata.coverMessageId = picTgResult.telegramMessageId;
 				} catch (e) {
 					console.error('Failed to upload thumbnail to Telegram:', e);
 				}
@@ -228,6 +229,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			finalCaption
 		);
 
+		let messageIdsArr = [tgResult.telegramMessageId];
+		if (metadata.coverMessageId) {
+			messageIdsArr.push(metadata.coverMessageId);
+		}
+
 		if (conflictAction === 'replace' && replaceFileId && existingFile) {
 			await db
 				.update(files)
@@ -242,6 +248,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					duration: metadata.duration ? Math.round(metadata.duration) : null,
 					thumbnailUrl: metadata.thumbnailUrl || null,
 					telegramMessageId: tgResult.telegramMessageId,
+					telegramMessageIds: JSON.stringify(messageIdsArr),
 					isEncrypted
 				})
 				.where(eq(files.id, fileId));
@@ -270,6 +277,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			duration: metadata.duration ? Math.round(metadata.duration) : null,
 			thumbnailUrl: metadata.thumbnailUrl || null,
 			telegramMessageId: tgResult.telegramMessageId,
+			telegramMessageIds: JSON.stringify(messageIdsArr),
 			isEncrypted
 		});
 

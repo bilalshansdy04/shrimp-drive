@@ -5,6 +5,7 @@ import { users, files } from '$lib/server/db/schema';
 import { eq, and, isNull, or, inArray } from 'drizzle-orm';
 import { getFileDownloadUrl, uploadFileToTelegram } from '$lib/server/telegram';
 import { parseBuffer } from 'music-metadata';
+import crypto from 'crypto';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	if (!locals.user) {
@@ -73,15 +74,29 @@ export const GET: RequestHandler = async ({ locals }) => {
 					node.botToken,
 					node.chatId,
 					picBlob,
-					'cover.jpg'
+					`${crypto.randomUUID()}.dat`
 				);
 				newThumbnailUrl = `/api/files/thumbnail/${picTgResult.telegramFileId}`;
+				
+				// Add cover message ID to the telegramMessageIds array to ensure it gets deleted
+				let messageIdsArr = [];
+				if (file.telegramMessageIds) {
+					try {
+						messageIdsArr = JSON.parse(file.telegramMessageIds);
+					} catch (e) {}
+				}
+				if (!Array.isArray(messageIdsArr)) messageIdsArr = [];
+				messageIdsArr.push(picTgResult.telegramMessageId);
+				
+				await db.update(files)
+					.set({ telegramMessageIds: JSON.stringify(messageIdsArr) })
+					.where(eq(files.id, file.id));
 			}
 
 			await db
 				.update(files)
 				.set({
-					thumbnailUrl: newThumbnailUrl,
+					thumbnailUrl: newThumbnailUrl || file.thumbnailUrl,
 					title,
 					artist,
 					album,
