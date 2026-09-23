@@ -292,9 +292,6 @@
 					</a>
 				</form>
 
-							</div>
-						</div>
-					</div>
 				{/if}
 
 				<div class="mt-6 text-center text-sm text-gray-400">
@@ -305,7 +302,6 @@
 						>Sign In di sini</a
 					>
 				</div>
-			{/if}
 		</div>
 	</main>
 </div>

@@ -85,10 +85,11 @@
 		</section>
 
 		<!-- Password / PIN -->
+		{#if !data.user.googleId}
 		<section class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-lg">
 			<h2 class="mb-6 flex items-center gap-2 text-xl font-bold text-white">
 				<Key class="text-[#FF6B4A]" size={24} />
-				{data.user.googleId ? 'Change Vault PIN' : 'Change Password'}
+				Change Password
 			</h2>
 			<form
 				onsubmit={async (e) => {
@@ -101,16 +102,15 @@
 					const confirmPassword = (formEl.elements.namedItem('confirmPassword') as HTMLInputElement)
 						.value;
 					
-					const isGoogle = !!data.user.googleId;
-					const minLength = isGoogle ? 6 : 8;
+					const minLength = 8;
 
 					if (newPassword !== confirmPassword) {
-						alert(`New ${isGoogle ? 'PINs' : 'passwords'} do not match.`);
+						alert(`New passwords do not match.`);
 						isLoading = false;
 						return;
 					}
 					if (newPassword.length < minLength) {
-						alert(`${isGoogle ? 'PIN' : 'Password'} must be at least ${minLength} characters.`);
+						alert(`Password must be at least ${minLength} characters.`);
 						isLoading = false;
 						return;
 					}
@@ -132,13 +132,13 @@
 						}
 
 						// 6. Alert success
-						alert(`${isGoogle ? 'PIN' : 'Password'} updated successfully!`);
+						alert(`Password updated successfully!`);
 						
 						formEl.reset();
 						window.location.reload();
 					} catch (err: any) {
 						console.error(err);
-						alert(err.message || `Failed to update ${isGoogle ? 'PIN' : 'password'}.`);
+						alert(err.message || `Failed to update password.`);
 					} finally {
 						isLoading = false;
 					}
@@ -148,44 +148,44 @@
 					{#if data.user.passwordHash}
 						<div class="group relative">
 							<label class="mb-1 block text-xs font-medium text-gray-400" for="currentPassword">
-								{data.user.googleId ? 'Current PIN' : 'Current Password'}
+								Current Password
 							</label>
 							<input
 								name="currentPassword"
 								id="currentPassword"
 								class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] px-4 py-2 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 								type="password"
-								inputmode={data.user.googleId ? 'numeric' : 'text'}
+								inputmode="text"
 								required
 							/>
 						</div>
 					{/if}
 					<div class="group relative">
 						<label class="mb-1 block text-xs font-medium text-gray-400" for="newPassword">
-							{data.user.googleId ? 'New PIN' : 'New Password'}
+							New Password
 						</label>
 						<input
 							name="newPassword"
 							id="newPassword"
 							class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] px-4 py-2 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 							type="password"
-							inputmode={data.user.googleId ? 'numeric' : 'text'}
+							inputmode="text"
 							required
-							minlength={data.user.googleId ? 6 : 8}
+							minlength={8}
 						/>
 					</div>
 					<div class="group relative">
 						<label class="mb-1 block text-xs font-medium text-gray-400" for="confirmPassword">
-							{data.user.googleId ? 'Confirm New PIN' : 'Confirm New Password'}
+							Confirm New Password
 						</label>
 						<input
 							name="confirmPassword"
 							id="confirmPassword"
 							class="w-full rounded-lg border border-[#2A3241] bg-[#0B0E14] px-4 py-2 text-sm text-white transition-colors focus:border-[#FF6B4A] focus:outline-none"
 							type="password"
-							inputmode={data.user.googleId ? 'numeric' : 'text'}
+							inputmode="text"
 							required
-							minlength={data.user.googleId ? 6 : 8}
+							minlength={8}
 						/>
 					</div>
 				</div>
@@ -195,10 +195,11 @@
 					disabled={isLoading}
 					class="mt-6 rounded-lg bg-[#2A3241] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3b465a] disabled:opacity-50"
 				>
-					{isLoading ? 'Updating...' : (data.user.googleId ? 'Update PIN' : 'Update Password')}
+					{isLoading ? 'Updating...' : 'Update Password'}
 				</button>
 			</form>
 		</section>
+		{/if}
 
 		<!-- Security & Encryption -->
 		<section class="rounded-2xl border border-[#2A3241] bg-[#151921] p-6 shadow-lg md:col-span-2">

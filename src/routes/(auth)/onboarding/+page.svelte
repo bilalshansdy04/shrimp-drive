@@ -82,7 +82,7 @@
 			currentStep = 3; // Channel
 		} else if (currentStep === 3 && backendChoice === 'custom') {
 			currentStep = 4;
-
+		}
 	}
 
 	async function verifyBot() {

@@ -769,48 +769,50 @@
 									</div>
 								</div>
 							</div>
-							<div class="flex flex-col p-3">
-								<span class="font-medium text-white text-sm truncate"
-									>{track.title || track.fileName}</span
-								>
-								<span class="text-gray-400 text-xs truncate"
-									>{track.artist || 'Unknown Artist'}</span
-								>
-							</div>
-							<div class="right-2 bottom-2 z-10 absolute flex items-center gap-1">
-								<button
-									onclick={(e) => {
-										e.stopPropagation();
-										downloadFile(track.id);
-									}}
-									class="flex justify-center items-center bg-[#FF6B4A] hover:opacity-90 rounded-full w-7 h-7 text-black transition-opacity"
-									title="Download"
-								>
-									<Download size={14} />
-								</button>
-								<button
-									onclick={async (e) => {
-										e.stopPropagation();
-										if (await askConfirm('Delete this track? This cannot be undone.')) {
-											const tid = toast.loading('Deleting track...');
-											const res = await fetch('/api/bulk/delete', {
-												method: 'POST',
-												headers: { 'Content-Type': 'application/json' },
-												body: JSON.stringify({ files: [track.id], folders: [] })
-											});
-											if (res.ok) {
-												toast.success('Track deleted successfully', { id: tid });
-												await invalidateAll();
-											} else {
-												toast.error('Failed to delete track', { id: tid });
+							<div class="flex items-end justify-between p-3 gap-2">
+								<div class="flex flex-col flex-1 min-w-0">
+									<span class="font-medium text-white text-sm truncate"
+										>{track.title || track.fileName}</span
+									>
+									<span class="text-gray-400 text-xs truncate"
+										>{track.artist || 'Unknown Artist'}</span
+									>
+								</div>
+								<div class="flex items-center gap-1 shrink-0">
+									<button
+										onclick={(e) => {
+											e.stopPropagation();
+											downloadFile(track.id);
+										}}
+										class="flex justify-center items-center bg-[#FF6B4A] hover:opacity-90 rounded-full w-7 h-7 text-black transition-opacity"
+										title="Download"
+									>
+										<Download size={14} />
+									</button>
+									<button
+										onclick={async (e) => {
+											e.stopPropagation();
+											if (await askConfirm('Delete this track? This cannot be undone.')) {
+												const tid = toast.loading('Deleting track...');
+												const res = await fetch('/api/bulk/delete', {
+													method: 'POST',
+													headers: { 'Content-Type': 'application/json' },
+													body: JSON.stringify({ files: [track.id], folders: [] })
+												});
+												if (res.ok) {
+													toast.success('Track deleted successfully', { id: tid });
+													await invalidateAll();
+												} else {
+													toast.error('Failed to delete track', { id: tid });
+												}
 											}
-										}
-									}}
-									class="flex justify-center items-center bg-red-600 hover:opacity-90 rounded-full w-7 h-7 text-white transition-opacity"
-									title="Delete"
-								>
-									<Trash2 size={14} />
-								</button>
+										}}
+										class="flex justify-center items-center bg-red-600 hover:opacity-90 rounded-full w-7 h-7 text-white transition-opacity"
+										title="Delete"
+									>
+										<Trash2 size={14} />
+									</button>
+								</div>
 							</div>
 						</div>
 					{/each}
