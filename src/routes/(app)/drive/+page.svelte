@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		HardDrive,
 		Folder,
 		FolderPlus,
 		MoreVertical,
@@ -103,11 +104,7 @@
 		}
 	}
 
-	let percentage = $derived(
-		data.user ? data.user.storageLimit === -1 ? 0 : Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
-	);
-	let circumference = 2 * Math.PI * 15.9155;
-	let dashoffset = $derived(circumference - (percentage / 100) * circumference);
+
 
 	// Handlers
 	function handleDrop(e: DragEvent) {
@@ -304,33 +301,13 @@
 	<div
 		class="flex items-center gap-4 md:gap-6 bg-[#151921] mb-8 p-4 md:p-6 border border-[#2A3241] rounded-2xl"
 	>
-		<div class="relative flex justify-center items-center w-16 h-16 shrink-0">
-			<svg class="w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
-				<path
-					class="text-[#2A3241]"
-					d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="3"
-				/>
-				<path
-					class="text-primary transition-all duration-1000 ease-out"
-					stroke-dasharray="{circumference}, {circumference}"
-					stroke-dashoffset={dashoffset}
-					d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="3"
-				/>
-			</svg>
-			<div class="absolute flex flex-col items-center">
-				<span class="font-bold text-white text-xs">{Math.round(percentage)}%</span>
-			</div>
+		<div class="relative flex justify-center items-center w-16 h-16 shrink-0 bg-[#2A3241] rounded-full">
+			<HardDrive class="text-[#FF6B4A]" size={32} />
 		</div>
 		<div class="flex-1">
 			<h2 class="font-bold text-white text-lg">Storage Overview</h2>
 			<p class="text-gray-400 text-sm">
-				{formatBytes(data.user?.storageUsed || 0)} used of {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}
+				{formatBytes(data.user?.storageUsed || 0)} Used (Unlimited Capacity)
 			</p>
 		</div>
 	</div>

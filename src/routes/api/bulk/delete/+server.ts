@@ -27,7 +27,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				where: and(inArray(files.id, fileIds), eq(files.userId, locals.user.id))
 			});
 			for (const f of filesToDelete) {
-				await hardDeleteFile(f.id, locals.user.id, locals.user.storageUsed);
+				await hardDeleteFile(f.id, locals.user.id);
 			}
 		}
 

@@ -34,10 +34,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return json({ error: 'Missing required fields: name, size, mimeType, parts' }, { status: 400 });
 	}
 
-	// Validate storage limit
-	if (locals.user.storageLimit !== -1 && locals.user.storageUsed + size > locals.user.storageLimit) {
-		return json({ error: 'Storage Limit Exceeded' }, { status: 403 });
-	}
+
 
 	// Validate folder if provided
 	if (folderId) {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		HardDrive,
 		Music,
 		Video,
 		FileText,
@@ -49,12 +50,7 @@
 		filter === 'all' ? data.recentFiles : data.recentFiles.filter((f: any) => f.fileType === filter)
 	);
 
-	let percentage = $derived(
-		data.user ? data.user.storageLimit === -1 ? 0 : Math.min(100, (data.user.storageUsed / data.user.storageLimit) * 100) : 0
-	);
 
-	let circumference = 2 * Math.PI * 15.9155;
-	let dashoffset = $derived(circumference - (percentage / 100) * circumference);
 
 	function getFileIcon(type: string) {
 		switch (type) {
@@ -133,30 +129,12 @@
 		<div
 			class="flex flex-col justify-center items-center bg-[#151921] p-6 border border-[#2A3241] rounded-2xl"
 		>
-			<div class="relative mb-3 w-24 h-24">
-				<svg class="w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
-					<path
-						class="stroke-current text-[#1E2430]"
-						d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-						fill="none"
-						stroke-width="3"
-					></path>
-					<path
-						class="stroke-current text-[#FF6B4A] transition-all duration-1000 ease-out"
-						d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-						fill="none"
-						stroke-dasharray={circumference}
-						stroke-dashoffset={dashoffset}
-						stroke-width="3"
-					></path>
-				</svg>
-				<div class="absolute inset-0 flex justify-center items-center font-bold text-white text-xl">
-					{Math.round(percentage)}%
-				</div>
+			<div class="relative flex justify-center items-center bg-[#2A3241] mb-3 rounded-full w-20 h-20">
+				<HardDrive class="text-[#FF6B4A]" size={40} />
 			</div>
 			<h3 class="font-medium text-gray-400 text-sm">Total Storage</h3>
 			<p class="mt-1 text-gray-500 text-xs">
-				{formatBytes(data.user?.storageUsed || 0)} / {data.user?.storageLimit === -1 ? 'Unlimited' : formatBytes(data.user?.storageLimit || 0)}
+				{formatBytes(data.user?.storageUsed || 0)} Used (Unlimited)
 			</p>
 		</div>
 

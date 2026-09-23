@@ -8,7 +8,7 @@ import { deleteTelegramMessage } from '$lib/server/telegram';
  * If Telegram deletion fails, DB is NOT touched → user sees error, file stays intact.
  * If file has no telegramMessageId (legacy/null), skip Telegram and delete DB only.
  */
-export async function hardDeleteFile(fileId: string, userId: string, currentStorageUsed: number) {
+export async function hardDeleteFile(fileId: string, userId: string) {
 	const fileResult = await db.select().from(files).where(and(eq(files.id, fileId), eq(files.userId, userId)));
 	if (fileResult.length === 0) throw new Error('File not found');
 	const fileToDelete = fileResult[0];
@@ -49,6 +49,11 @@ export async function hardDeleteFile(fileId: string, userId: string, currentStor
 
 	// Step 2: Delete from DB (only reached if Telegram succeeded or no telegramMessageId)
 	await db.delete(files).where(eq(files.id, fileId));
-	const newStorageUsed = Math.max(0, currentStorageUsed - fileToDelete.fileSize);
-	await db.update(users).set({ storageUsed: newStorageUsed }).where(eq(users.id, userId));
+	
+	const userRec = await db.select({ storageUsed: users.storageUsed }).from(users).where(eq(users.id, userId));
+	if (userRec.length > 0) {
+		const currentStorageUsed = userRec[0].storageUsed;
+		const newStorageUsed = Math.max(0, currentStorageUsed - fileToDelete.fileSize);
+		await db.update(users).set({ storageUsed: newStorageUsed }).where(eq(users.id, userId));
+	}
 }
