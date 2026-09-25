@@ -15,6 +15,7 @@
 	import type { PageData } from './$types';
 	import { toast } from 'svelte-sonner';
 	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 
 	const { data }: { data: PageData } = $props();
 	const photoFiles = $derived(data.photoFiles);
@@ -305,21 +306,11 @@
 								{/if}
 							</div>
 						{/if}
-						<img
-							src={photo.thumbnailUrl || `/api/files/${photo.id}/download`}
+						<LazyImage
+							id={photo.id}
+							url={photo.thumbnailUrl || `/api/files/${photo.id}/download`}
 							alt={photo.fileName}
-							loading="lazy"
-							decoding="async"
-							class="h-auto w-full object-cover transition-transform duration-500 group-hover:scale-105"
-							onerror={(e) => {
-								if (photo.isEncrypted) {
-									toast.error(
-										'File video rusak atau kunci dekripsi tidak cocok. Disarankan hapus file dan upload ulang'
-									);
-								}
-								// Hide broken image icon
-								(e.currentTarget as HTMLImageElement).style.display = 'none';
-							}}
+							class="h-auto w-full object-cover transition-transform duration-500 group-hover:scale-105 min-h-[150px]"
 						/>
 
 						<!-- Hover Overlay / Action -->

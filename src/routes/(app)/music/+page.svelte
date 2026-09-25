@@ -29,6 +29,7 @@
 	import { media, downloadFileClient } from '$lib/client/mediaState.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import LyricsPanel from '$lib/components/music/LyricsPanel.svelte';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 	import { confirmDelete, confirmDeleteMultiple } from '$lib/utils/deleteConfirm';
 	import { askConfirm } from '$lib/client/confirm.svelte';
 	import { toast } from 'svelte-sonner';
@@ -642,12 +643,12 @@
 											<div
 												class="flex justify-center items-center bg-[#10131a] border border-[#2A3241] rounded w-8 h-8 overflow-hidden shrink-0"
 											>
-												<img
+												<LazyImage
+													id={track.id + '-cover'}
+													url={track.thumbnailUrl || defaultMusicCover}
+													type="music"
 													class="w-full h-full object-cover"
 													alt="Cover"
-													src={track.thumbnailUrl || defaultMusicCover}
-													onerror={(e) =>
-														((e.currentTarget as HTMLImageElement).src = defaultMusicCover)}
 												/>
 											</div>
 											<span
@@ -747,9 +748,10 @@
 								</div>
 							{/if}
 							<div class="relative bg-black/40 w-full aspect-square overflow-hidden">
-								<img
-									src={track.thumbnailUrl || defaultMusicCover}
-									onerror={(e) => ((e.currentTarget as HTMLImageElement).src = defaultMusicCover)}
+								<LazyImage
+									id={track.id + '-cover'}
+									url={track.thumbnailUrl || defaultMusicCover}
+									type="music"
 									alt="Cover"
 									class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
 								/>

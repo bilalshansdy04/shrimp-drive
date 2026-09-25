@@ -100,6 +100,24 @@
 		}
 		target.value = '';
 	}
+
+	import { clearThumbnails } from '$lib/client/idb';
+	import { askConfirm } from '$lib/client/confirm.svelte';
+	
+	async function triggerLogout() {
+		if (await askConfirm('Are you sure you want to log out?')) {
+			const form = document.getElementById('logout-form') as HTMLFormElement;
+			if (form) form.requestSubmit();
+		}
+	}
+
+	function handleLogout() {
+		return async ({ update }: { update: () => Promise<void> }) => {
+			await clearThumbnails();
+			update();
+		};
+	}
+
 </script>
 
 <Toaster theme="dark" position="top-right" offset="80px" />
@@ -225,10 +243,11 @@
 				>
 					<Settings size={16} />
 				</a>
-				<form action="/logout" method="POST" use:enhance class="flex">
+				<form id="logout-form" action="/logout" method="POST" use:enhance={handleLogout} class="flex">
 					<button
 						class="p-1 text-gray-400 transition-colors hover:text-white"
-						type="submit"
+						type="button"
+						onclick={triggerLogout}
 						title="Log Out"
 					>
 						<LogOut size={16} />

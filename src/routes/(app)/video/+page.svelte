@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { downloadFileClient } from '$lib/client/mediaState.svelte';
 	import type { PageData } from './$types';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 
 	const { data }: { data: PageData } = $props();
 	const videoFiles = $derived(data.videoFiles);
@@ -239,17 +240,14 @@
 							</div>
 						{/if}
 						<div class="relative aspect-video w-full overflow-hidden bg-[#0B0E14]">
-							{#if video.thumbnailUrl}
-								<img
-									src={video.thumbnailUrl}
-									alt={video.fileName}
-									class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-								/>
-							{:else}
-								<div class="flex h-full w-full items-center justify-center text-gray-500">
-									<Film size={32} />
-								</div>
-							{/if}
+							<LazyImage
+								id={video.id}
+								url={video.thumbnailUrl || ''}
+								type="video"
+								videoSrc={`/api/files/${video.id}/download`}
+								alt={video.fileName}
+								class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+							/>
 
 							{#if !selectionMode}
 								<div
