@@ -39,31 +39,83 @@
 				return;
 			}
 
-			// 2. Not in IDB, if no URL but it's a video and we have videoSrc, generate frame
-			let blobToSave: Blob;
-
+			// 2. Fetch from network or generate video frame
+			let blobToProcess: Blob;
 			if (!url && type === 'video' && videoSrc) {
-				blobToSave = await generateVideoThumbnail(videoSrc);
+				blobToProcess = await generateVideoThumbnail(videoSrc);
 			} else if (url) {
-				// Fetch from network
 				const res = await fetch(url);
 				if (!res.ok) throw new Error('Failed to fetch image');
-				blobToSave = await res.blob();
+				blobToProcess = await res.blob();
 			} else {
 				throw new Error('No URL provided');
 			}
 
-			// 3. Save to IDB
-			await saveThumbnail(id, blobToSave);
+			// 3. Compress if it's an image
+			let finalBlob = blobToProcess;
+			if (type !== 'video' && blobToProcess.type.startsWith('image/')) {
+				finalBlob = await compressImage(blobToProcess);
+			}
 
-			// 4. Display
-			objectUrl = URL.createObjectURL(blobToSave);
+			// 4. Save to IDB
+			await saveThumbnail(id, finalBlob);
+
+			// 5. Display
+			objectUrl = URL.createObjectURL(finalBlob);
 			imageSrc = objectUrl;
 			loaded = true;
 		} catch (e) {
 			console.error('LazyImage error:', e);
 			error = true;
 		}
+	}
+
+	function compressImage(fileOrBlob: Blob): Promise<Blob> {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			const objectUrl = URL.createObjectURL(fileOrBlob);
+			img.onload = () => {
+				URL.revokeObjectURL(objectUrl);
+				
+				// Max dimension 400px for thumbnail
+				const MAX_DIM = 400;
+				let width = img.width;
+				let height = img.height;
+
+				if (width > height) {
+					if (width > MAX_DIM) {
+						height *= MAX_DIM / width;
+						width = MAX_DIM;
+					}
+				} else {
+					if (height > MAX_DIM) {
+						width *= MAX_DIM / height;
+						height = MAX_DIM;
+					}
+				}
+
+				const canvas = document.createElement('canvas');
+				canvas.width = width;
+				canvas.height = height;
+				const ctx = canvas.getContext('2d');
+				if (!ctx) return resolve(fileOrBlob); // fallback if canvas fails
+
+				ctx.drawImage(img, 0, 0, width, height);
+				canvas.toBlob(
+					(blob) => {
+						if (blob) resolve(blob);
+						else resolve(fileOrBlob);
+					},
+					'image/jpeg',
+					0.7 // 70% quality JPEG
+				);
+			};
+			img.onerror = () => {
+				URL.revokeObjectURL(objectUrl);
+				resolve(fileOrBlob); // fallback to original if image fails to load
+			};
+			img.src = objectUrl;
+		});
 	}
 
 	function generateVideoThumbnail(src: string): Promise<Blob> {

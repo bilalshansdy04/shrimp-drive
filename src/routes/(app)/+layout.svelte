@@ -104,19 +104,25 @@
 	import { clearThumbnails } from '$lib/client/idb';
 	import { askConfirm } from '$lib/client/confirm.svelte';
 	
+	let isLoggingOut = $state(false);
+
 	async function triggerLogout() {
-		if (await askConfirm('Are you sure you want to log out?')) {
+		if (await askConfirm('Are you sure you want to log out?', 'Log Out')) {
 			const form = document.getElementById('logout-form') as HTMLFormElement;
 			if (form) form.requestSubmit();
 		}
 	}
 
 	function handleLogout() {
+		isLoggingOut = true;
 		return async ({ update }: { update: () => Promise<void> }) => {
 			await clearThumbnails();
-			update();
+			await update();
+			// Explicitly redirect just in case
+			window.location.href = '/login';
 		};
 	}
+
 
 </script>
 
@@ -453,9 +459,19 @@
 					onclick={confirmModal.onConfirm}
 					class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl text-white transition-colors shadow-lg shadow-red-600/20"
 				>
-					Delete
+					{confirmModal.confirmText}
 				</button>
 			</div>
+		</div>
+	</div>
+{/if}
+
+{#if isLoggingOut}
+	<!-- Full screen unclickable loading overlay -->
+	<div class="z-[999] fixed inset-0 flex justify-center items-center bg-black/80 backdrop-blur-sm pointer-events-auto">
+		<div class="flex flex-col items-center gap-4">
+			<Loader2 size={48} class="text-[#FF6B4A] animate-spin" />
+			<p class="text-white font-medium text-lg animate-pulse">Logging out...</p>
 		</div>
 	</div>
 {/if}
