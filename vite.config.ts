@@ -13,7 +13,7 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 			adapter: adapter({
-				runtime: 'nodejs20.x'
+				runtime: 'nodejs22.x'
 			}),
 			typescript: {
 				config: (config) => {
