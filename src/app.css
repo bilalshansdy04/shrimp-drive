@@ -13,3 +13,90 @@ body {
 	background-color: #0b0e14;
 	color: #e1e2eb;
 }
+
+/* ===== Custom Scrollbar (matches dark UI design) ===== */
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+	width: 14px;
+	height: 14px;
+}
+
+::-webkit-scrollbar-track {
+	background: #151921;
+}
+
+::-webkit-scrollbar-thumb {
+	background: #4a5568;
+	border: 3px solid #151921;
+	border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: #636e83;
+}
+
+::-webkit-scrollbar-thumb:active {
+	background: #7a8599;
+}
+
+::-webkit-scrollbar-button:single-button {
+	height: 16px;
+	width: 14px;
+	background: #151921;
+	display: block;
+}
+
+/* Up arrow button */
+::-webkit-scrollbar-button:single-button:vertical:decrement {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'%3E%3Cpath d='M4 0L8 6H0z' fill='%234a5568'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+::-webkit-scrollbar-button:single-button:vertical:decrement:hover {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'%3E%3Cpath d='M4 0L8 6H0z' fill='%23a0aec0'/%3E%3C/svg%3E");
+}
+
+/* Down arrow button */
+::-webkit-scrollbar-button:single-button:vertical:increment {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'%3E%3Cpath d='M4 6L0 0h8z' fill='%234a5568'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+::-webkit-scrollbar-button:single-button:vertical:increment:hover {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'%3E%3Cpath d='M4 6L0 0h8z' fill='%23a0aec0'/%3E%3C/svg%3E");
+}
+
+/* Left arrow button (horizontal) */
+::-webkit-scrollbar-button:single-button:horizontal:decrement {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='8' viewBox='0 0 6 8'%3E%3Cpath d='M0 4L6 0v8z' fill='%234a5568'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+::-webkit-scrollbar-button:single-button:horizontal:decrement:hover {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='8' viewBox='0 0 6 8'%3E%3Cpath d='M0 4L6 0v8z' fill='%23a0aec0'/%3E%3C/svg%3E");
+}
+
+/* Right arrow button (horizontal) */
+::-webkit-scrollbar-button:single-button:horizontal:increment {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='8' viewBox='0 0 6 8'%3E%3Cpath d='M6 4L0 8V0z' fill='%234a5568'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: center;
+}
+
+::-webkit-scrollbar-button:single-button:horizontal:increment:hover {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='8' viewBox='0 0 6 8'%3E%3Cpath d='M6 4L0 8V0z' fill='%23a0aec0'/%3E%3C/svg%3E");
+}
+
+::-webkit-scrollbar-corner {
+	background: #151921;
+}
+
+/* Firefox */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #4a5568 #151921;
+}
